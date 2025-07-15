@@ -123,3 +123,5 @@ build/
 # Database
 *.sqlite
 *.db
+
+uploads/

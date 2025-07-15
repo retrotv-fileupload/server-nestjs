@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="ko">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>청크 기반 대용량 파일 업로드</title>
+        <style>
+            body {
+                font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: #f5f5f5;
+            }
+
+            .container {
+                background: white;
+                padding: 30px;
+                border-radius: 10px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            }
+
+            h1 {
+                color: #333;
+                text-align: center;
+                margin-bottom: 30px;
+            }
+
+            .upload-section {
+                margin-bottom: 30px;
+            }
+
+            .file-input {
+                width: 100%;
+                padding: 10px;
+                border: 2px dashed #ddd;
+                border-radius: 8px;
+                text-align: center;
+                margin-bottom: 20px;
+                cursor: pointer;
+                transition: border-color 0.3s;
+            }
+
+            .file-input:hover {
+                border-color: #4caf50;
+            }
+
+            input[type="file"] {
+                width: 100%;
+                padding: 10px;
+                margin-bottom: 10px;
+            }
+
+            .controls {
+                display: flex;
+                gap: 10px;
+                margin-bottom: 20px;
+            }
+
+            button {
+                padding: 12px 24px;
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 16px;
+                transition: background-color 0.3s;
+            }
+
+            .btn-primary {
+                background-color: #4caf50;
+                color: white;
+            }
+
+            .btn-primary:hover {
+                background-color: #45a049;
+            }
+
+            .btn-secondary {
+                background-color: #f44336;
+                color: white;
+            }
+
+            .btn-secondary:hover {
+                background-color: #da190b;
+            }
+
+            .btn-disabled {
+                background-color: #cccccc;
+                color: #666;
+                cursor: not-allowed;
+            }
+
+            .progress-container {
+                margin-bottom: 20px;
+            }
+
+            .progress-bar {
+                width: 100%;
+                height: 25px;
+                background-color: #f0f0f0;
+                border-radius: 12px;
+                overflow: hidden;
+                margin-bottom: 10px;
+            }
+
+            .progress-fill {
+                height: 100%;
+                background: linear-gradient(90deg, #4caf50 0%, #45a049 100%);
+                width: 0%;
+                transition: width 0.3s ease;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-weight: bold;
+            }
+
+            .status {
+                padding: 15px;
+                margin-bottom: 20px;
+                border-radius: 6px;
+                background-color: #e7f3ff;
+                border-left: 4px solid #2196f3;
+            }
+
+            .status.success {
+                background-color: #e8f5e8;
+                border-left-color: #4caf50;
+            }
+
+            .status.error {
+                background-color: #ffebee;
+                border-left-color: #f44336;
+            }
+
+            .chunk-info {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                gap: 10px;
+                margin-top: 10px;
+            }
+
+            .info-item {
+                background: #f8f9fa;
+                padding: 10px;
+                border-radius: 4px;
+                text-align: center;
+            }
+
+            .info-label {
+                font-size: 12px;
+                color: #666;
+                margin-bottom: 5px;
+            }
+
+            .info-value {
+                font-size: 16px;
+                font-weight: bold;
+                color: #333;
+            }
+
+            .log {
+                background: #1e1e1e;
+                color: #00ff00;
+                font-family: "Courier New", monospace;
+                padding: 15px;
+                border-radius: 6px;
+                height: 200px;
+                overflow-y: auto;
+                font-size: 12px;
+                line-height: 1.4;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🚀 청크 기반 대용량 파일 업로드</h1>
+
+            <div class="upload-section">
+                <div class="file-input">
+                    <input type="file" id="fileInput" />
+                </div>
+
+                <div class="controls">
+                    <button id="uploadBtn" class="btn-primary" onclick="startUpload()">📤 업로드 시작</button>
+                    <button id="cancelBtn" class="btn-secondary btn-disabled" onclick="cancelUpload()">
+                        ❌ 업로드 취소
+                    </button>
+                </div>
+            </div>
+
+            <div class="progress-container">
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill">0%</div>
+                </div>
+
+                <div class="chunk-info">
+                    <div class="info-item">
+                        <div class="info-label">진행률</div>
+                        <div id="progressText" class="info-value">0%</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">업로드된 청크</div>
+                        <div id="chunksText" class="info-value">0 / 0</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">파일 크기</div>
+                        <div id="fileSizeText" class="info-value">-</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">상태</div>
+                        <div id="statusText" class="info-value">대기중</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="status" class="status">파일을 선택하고 업로드 시작 버튼을 클릭하세요.</div>
+
+            <div class="log" id="log"></div>
+        </div>
+
+        <script>
+            let sessionId = null;
+            let statusInterval = null;
+            let isUploading = false;
+
+            const CHUNK_SIZE = 2 * 1024 * 1024; // 2MB 청크 크기
+            const API_BASE = "http://localhost:3000";
+
+            // 로그 함수
+            function log(message, type = "info") {
+                const logElement = document.getElementById("log");
+                const timestamp = new Date().toLocaleTimeString();
+                const prefix = type === "error" ? "❌" : type === "success" ? "✅" : "ℹ️";
+
+                logElement.innerHTML += `[${timestamp}] ${prefix} ${message}\n`;
+                logElement.scrollTop = logElement.scrollHeight;
+                console.log(`[${type.toUpperCase()}]`, message);
+            }
+
+            // 상태 업데이트
+            function updateStatus(message, type = "info") {
+                const statusElement = document.getElementById("status");
+                statusElement.textContent = message;
+                statusElement.className = `status ${type}`;
+                log(message, type);
+            }
+
+            // 진행률 업데이트
+            function updateProgress(progress, uploaded, total) {
+                document.getElementById("progressFill").style.width = progress + "%";
+                document.getElementById("progressFill").textContent = progress + "%";
+                document.getElementById("progressText").textContent = progress + "%";
+                document.getElementById("chunksText").textContent = `${uploaded} / ${total}`;
+            }
+
+            // 파일 크기 포맷팅
+            function formatFileSize(bytes) {
+                if (bytes === 0) return "0 Bytes";
+                const k = 1024;
+                const sizes = ["Bytes", "KB", "MB", "GB"];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+            }
+
+            // 버튼 상태 관리
+            function setButtonStates(uploading) {
+                const uploadBtn = document.getElementById("uploadBtn");
+                const cancelBtn = document.getElementById("cancelBtn");
+
+                if (uploading) {
+                    uploadBtn.className = "btn-primary btn-disabled";
+                    uploadBtn.textContent = "⏳ 업로드 중...";
+                    cancelBtn.className = "btn-secondary";
+                } else {
+                    uploadBtn.className = "btn-primary";
+                    uploadBtn.textContent = "📤 업로드 시작";
+                    cancelBtn.className = "btn-secondary btn-disabled";
+                }
+            }
+
+            // 상태 모니터링 시작
+            function startStatusMonitoring() {
+                if (statusInterval) clearInterval(statusInterval);
+
+                statusInterval = setInterval(async () => {
+                    if (!sessionId) return;
+
+                    try {
+                        const response = await fetch(`${API_BASE}/api/files/upload/status?sessionId=${sessionId}`);
+                        const data = await response.json();
+
+                        if (response.ok) {
+                            updateProgress(data.progress, data.uploadedChunks, data.totalChunks);
+                            document.getElementById("statusText").textContent = data.status;
+
+                            if (data.progress === 100 && data.status === "all_chunks_uploaded") {
+                                log("모든 청크 업로드 완료! 파일 병합을 시작합니다.", "success");
+                            }
+                        }
+                    } catch (error) {
+                        log(`상태 조회 실패: ${error.message}`, "error");
+                    }
+                }, 1000); // 1초마다 상태 확인
+            }
+
+            // 상태 모니터링 중지
+            function stopStatusMonitoring() {
+                if (statusInterval) {
+                    clearInterval(statusInterval);
+                    statusInterval = null;
+                }
+            }
+
+            // 업로드 시작
+            async function startUpload() {
+                const fileInput = document.getElementById("fileInput");
+                const file = fileInput.files[0];
+
+                if (!file) {
+                    updateStatus("파일을 선택해주세요.", "error");
+                    return;
+                }
+
+                if (isUploading) {
+                    updateStatus("이미 업로드가 진행 중입니다.", "error");
+                    return;
+                }
+
+                isUploading = true;
+                setButtonStates(true);
+
+                // 파일 정보 표시
+                document.getElementById("fileSizeText").textContent = formatFileSize(file.size);
+                document.getElementById("statusText").textContent = "초기화 중";
+
+                const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+
+                log(`업로드 시작: ${file.name} (${formatFileSize(file.size)}, ${totalChunks}개 청크)`);
+
+                try {
+                    // 1. 업로드 초기화
+                    updateStatus("업로드 세션을 초기화하는 중...");
+
+                    const initResponse = await fetch(`${API_BASE}/api/files/upload/init`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            fileName: file.name,
+                            fileSize: file.size,
+                            totalChunks: totalChunks,
+                            mimeType: file.type,
+                        }),
+                    });
+
+                    const initData = await initResponse.json();
+
+                    if (!initResponse.ok) {
+                        throw new Error(initData.error || "초기화 실패");
+                    }
+
+                    sessionId = initData.sessionId;
+                    log(`세션 생성 완료: ${sessionId}`);
+
+                    // 2. 상태 모니터링 시작
+                    startStatusMonitoring();
+
+                    // 3. 청크 업로드
+                    updateStatus("파일을 청크 단위로 업로드하는 중...");
+
+                    for (let i = 0; i < totalChunks; i++) {
+                        if (!isUploading) break; // 취소된 경우
+
+                        const start = i * CHUNK_SIZE;
+                        const end = Math.min(start + CHUNK_SIZE, file.size);
+                        const chunk = file.slice(start, end);
+
+                        const formData = new FormData();
+                        formData.append("sessionId", sessionId);
+                        formData.append("chunkIndex", i);
+                        formData.append("chunk", chunk);
+
+                        let retryCount = 0;
+                        const maxRetries = 3;
+
+                        while (retryCount <= maxRetries) {
+                            try {
+                                const response = await fetch(`${API_BASE}/api/files/upload/chunk`, {
+                                    method: "POST",
+                                    body: formData,
+                                });
+
+                                const result = await response.json();
+
+                                if (!response.ok) {
+                                    throw new Error(result.error || "청크 업로드 실패");
+                                }
+
+                                log(`청크 ${i + 1}/${totalChunks} 업로드 완료 (${result.progress}%)`);
+
+                                // 즉시 진행률 업데이트
+                                updateProgress(result.progress, result.uploadedChunks, result.totalChunks);
+
+                                // 모든 청크가 완료되었는지 확인
+                                if (result.isComplete) {
+                                    log("🎉 모든 청크 업로드 완료!", "success");
+                                    updateStatus("모든 청크 업로드 완료! 파일 병합 준비 중...", "success");
+                                }
+
+                                break;
+                            } catch (error) {
+                                retryCount++;
+                                if (retryCount > maxRetries) {
+                                    throw new Error(
+                                        `청크 ${i} 업로드 실패 (재시도 ${maxRetries}회 실패): ${error.message}`,
+                                    );
+                                }
+                                log(
+                                    `청크 ${i} 업로드 실패, 재시도 ${retryCount}/${maxRetries}... 에러: ${error.message}`,
+                                    "error",
+                                );
+
+                                // 응답 상태 코드와 본문을 로그로 출력
+                                if (error.response) {
+                                    log(`응답 상태: ${error.response.status}`, "error");
+                                    log(`응답 본문: ${await error.response.text()}`, "error");
+                                }
+
+                                await new Promise(resolve => setTimeout(resolve, 1000)); // 1초 대기
+                            }
+                        }
+                    }
+
+                    if (!isUploading) {
+                        updateStatus("업로드가 취소되었습니다.", "error");
+                        return;
+                    }
+
+                    // 짧은 대기 시간 추가하여 상태 모니터링이 마지막 상태를 확인할 수 있도록 함
+                    await new Promise(resolve => setTimeout(resolve, 500));
+
+                    // 4. 업로드 완료 처리
+                    updateStatus("파일 병합 중...");
+                    log("모든 청크 업로드 완료, 파일 병합을 시작합니다...");
+
+                    const completeResponse = await fetch(`${API_BASE}/api/files/upload/complete`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ sessionId }),
+                    });
+
+                    const completeData = await completeResponse.json();
+
+                    if (!completeResponse.ok) {
+                        throw new Error(completeData.error || "완료 처리 실패");
+                    }
+
+                    updateStatus(`업로드 완료! 파일 ID: ${completeData.file.id}`, "success");
+                    log(`✅ 업로드 성공: ${completeData.file.downloadUrl}`, "success");
+                } catch (error) {
+                    updateStatus(`업로드 실패: ${error.message}`, "error");
+                    log(`업로드 실패: ${error.message}`, "error");
+                } finally {
+                    isUploading = false;
+                    setButtonStates(false);
+                    stopStatusMonitoring();
+                    sessionId = null;
+                }
+            }
+
+            // 업로드 취소
+            async function cancelUpload() {
+                if (!isUploading || !sessionId) {
+                    updateStatus("취소할 업로드가 없습니다.", "error");
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${API_BASE}/api/files/upload/cancel`, {
+                        method: "DELETE",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ sessionId }),
+                    });
+
+                    if (response.ok) {
+                        updateStatus("업로드가 취소되었습니다.", "success");
+                        log("업로드 취소됨", "success");
+                    }
+                } catch (error) {
+                    log(`취소 요청 실패: ${error.message}`, "error");
+                } finally {
+                    isUploading = false;
+                    setButtonStates(false);
+                    stopStatusMonitoring();
+                    sessionId = null;
+                    updateProgress(0, 0, 0);
+                    document.getElementById("statusText").textContent = "취소됨";
+                }
+            }
+
+            // 페이지 로드 시 초기화
+            document.addEventListener("DOMContentLoaded", () => {
+                log("청크 기반 업로드 클라이언트가 준비되었습니다.");
+                log(`청크 크기: ${formatFileSize(CHUNK_SIZE)}`);
+                log(`API 서버: ${API_BASE}`);
+            });
+
+            // 페이지 종료 시 정리
+            window.addEventListener("beforeunload", e => {
+                if (isUploading) {
+                    e.preventDefault();
+                    e.returnValue = "업로드가 진행 중입니다. 페이지를 떠나시겠습니까?";
+                }
+            });
+        </script>
+    </body>
+</html>
