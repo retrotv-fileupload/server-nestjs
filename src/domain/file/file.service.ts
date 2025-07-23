@@ -120,15 +120,15 @@ export class FileService {
     /**
      * 업로드 세션 초기화
      */
-    initializeUploadSession(
+    async initializeUploadSession(
         fileName: string,
         fileSize: number,
         totalChunks: number,
         mimeType?: string,
-    ): { sessionId: string } {
+    ): Promise<string> {
         const sessionId = this.generateSessionId();
         const tempDir = path.join(this.TEMP_DIR, sessionId);
-        fs.mkdirSync(tempDir, { recursive: true });
+        await fs.promises.mkdir(tempDir, { recursive: true });
 
         const session: UploadSession = {
             sessionId,
@@ -146,13 +146,13 @@ export class FileService {
         this.uploadSessions.set(sessionId, session);
         this.logger.log(`[INIT] Session: ${sessionId}, File: ${fileName}, Chunks: ${totalChunks}`);
 
-        return { sessionId };
+        return sessionId;
     }
 
     /**
      * 청크 업로드 처리
      */
-    processChunkUpload(sessionId: string, chunkIndex: number, chunkBuffer: Buffer): ChunkUploadResponse {
+    async processChunkUpload(sessionId: string, chunkIndex: number, chunkBuffer: Buffer): Promise<ChunkUploadResponse> {
         // 동시 업로드 수 제한
         if (this.activeUploads >= this.MAX_CONCURRENT_UPLOADS) {
             throw new Error("Too many concurrent uploads");
@@ -187,7 +187,7 @@ export class FileService {
 
             // 청크 파일 저장
             const chunkPath = path.join(session.tempDir, `chunk_${chunkIndex.toString().padStart(6, "0")}`);
-            fs.writeFileSync(chunkPath, chunkBuffer);
+            fs.promises.writeFile(chunkPath, chunkBuffer);
 
             // 청크 등록
             session.uploadedChunks.add(chunkIndex);

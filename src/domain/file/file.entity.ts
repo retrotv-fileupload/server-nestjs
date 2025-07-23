@@ -1,8 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from "typeorm";
+import { Entity, PrimaryColumn, Column, CreateDateColumn, UpdateDateColumn, BeforeInsert } from "typeorm";
+import { v7 as uuidv7 } from "uuid";
 
 @Entity("files")
 export class FileEntity {
-    @PrimaryGeneratedColumn("uuid")
+    @PrimaryColumn("uuid")
     id: string;
 
     @Column({ length: 500 })
@@ -43,4 +44,11 @@ export class FileEntity {
 
     @Column({ type: "json", nullable: true })
     metadata: Record<string, any>;
+
+    @BeforeInsert()
+    generateId() {
+        if (!this.id) {
+            this.id = uuidv7();
+        }
+    }
 }

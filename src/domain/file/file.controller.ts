@@ -56,7 +56,7 @@ export class FileController {
     }
 
     @Get("/upload/status")
-    getStatus(@Query("sessionId") sessionId: string, @Res() res: Response): void {
+    async getStatus(@Query("sessionId") sessionId: string, @Res() res: Response): Promise<void> {
         if (!sessionId) {
             return this.sendError(res, HttpStatus.BAD_REQUEST, "Session ID is required");
         }
@@ -71,7 +71,7 @@ export class FileController {
     }
 
     @Post("/upload/init")
-    uploadInit(@Body() initData: InitUploadDto, @Res() res: Response): void {
+    async uploadInit(@Body() initData: InitUploadDto, @Res() res: Response): Promise<void> {
         try {
             const { fileName, fileSize, totalChunks, mimeType } = initData;
 
@@ -79,11 +79,11 @@ export class FileController {
                 return this.sendError(res, HttpStatus.BAD_REQUEST, "Missing required fields");
             }
 
-            const result = this.fileService.initializeUploadSession(fileName, fileSize, totalChunks, mimeType);
+            const sessionId = await this.fileService.initializeUploadSession(fileName, fileSize, totalChunks, mimeType);
 
             res.status(HttpStatus.OK).json({
                 success: true,
-                sessionId: result.sessionId,
+                sessionId: sessionId,
                 message: "Upload session initialized",
             });
         } catch (error) {
@@ -93,7 +93,7 @@ export class FileController {
     }
 
     @Post("/upload/chunk")
-    uploadChunk(@Req() req: Request, @Res() res: Response): void {
+    async uploadChunk(@Req() req: Request, @Res() res: Response): Promise<void> {
         const form = new IncomingForm({
             maxFileSize: 10 * 1024 * 1024, // 10MB
             multiples: false,
@@ -103,7 +103,7 @@ export class FileController {
             keepExtensions: false,
         });
 
-        form.parse(req, (err: any, fields: any, files: any) => {
+        form.parse(req, async (err: any, fields: any, files: any) => {
             if (err) {
                 this.logger.error(`[CHUNK ERROR] ${err.message}`);
                 return this.sendError(res, HttpStatus.BAD_REQUEST, `Chunk upload failed: ${err.message}`);
@@ -129,7 +129,7 @@ export class FileController {
                 // 임시 파일 삭제
                 fs.unlinkSync(chunkFile.filepath);
 
-                const result = this.fileService.processChunkUpload(sessionId, chunkIdx, chunkBuffer);
+                const result = await this.fileService.processChunkUpload(sessionId, chunkIdx, chunkBuffer);
 
                 res.status(HttpStatus.OK).json(result);
             } catch (error) {
@@ -174,7 +174,7 @@ export class FileController {
     }
 
     @Delete("/upload/cancel")
-    uploadCancel(@Body() body: { sessionId: string }, @Res() res: Response): void {
+    async uploadCancel(@Body() body: { sessionId: string }, @Res() res: Response): Promise<void> {
         try {
             const { sessionId } = body;
 
