@@ -24,6 +24,7 @@
     "@nestjs/core": "^11.1.3",
     "@nestjs/platform-express": "^11.1.3",
     "@nestjs/typeorm": "^11.0.0",
+    "@retrotv/file": "^0.0.2",
     "@types/formidable": "^3.4.5",
     "@types/uuid": "^10.0.0",
     "formidable": "^3.5.4",

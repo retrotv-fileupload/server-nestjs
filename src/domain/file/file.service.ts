@@ -4,6 +4,8 @@ import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
 
+import { FileUtils } from "../../common/utils/file.utils";
+
 // 업로드 세션 인터페이스
 export interface UploadSession {
     sessionId: string;
@@ -63,21 +65,10 @@ export class FileService {
 
     constructor(private readonly fileRepository: FileRepository) {
         // 디렉토리 생성
-        this.initializeDirectories();
+        FileUtils.mkdir(this.UPLOAD_DIR, this.TEMP_DIR);
 
         // 세션 정리 스케줄러 시작
         this.startSessionCleanup();
-    }
-
-    private initializeDirectories(): void {
-        if (!fs.existsSync(this.UPLOAD_DIR)) {
-            fs.mkdirSync(this.UPLOAD_DIR, { recursive: true });
-            this.logger.log(`Upload directory created: ${this.UPLOAD_DIR}`);
-        }
-        if (!fs.existsSync(this.TEMP_DIR)) {
-            fs.mkdirSync(this.TEMP_DIR, { recursive: true });
-            this.logger.log(`Temp directory created: ${this.TEMP_DIR}`);
-        }
     }
 
     private startSessionCleanup(): void {
@@ -284,7 +275,7 @@ export class FileService {
             await this.mergeChunks(session, finalFilePath);
 
             // 파일 해시 계산
-            const hash = await this.calculateFileHash(finalFilePath);
+            const hash = FileUtils.getHash(finalFilePath);
 
             // 데이터베이스에 저장
             const fileEntity = await this.fileRepository.create({
@@ -360,19 +351,6 @@ export class FileService {
         this.logger.log(`[CANCEL] Session cancelled: ${sessionId}`);
     }
 
-    /**
-     * 파일 해시 계산
-     */
-    private calculateFileHash(filePath: string): Promise<string> {
-        return new Promise((resolve, reject) => {
-            const hash = crypto.createHash("sha256");
-            const stream = fs.createReadStream(filePath);
-
-            stream.on("data", data => hash.update(data));
-            stream.on("end", () => resolve(hash.digest("hex")));
-            stream.on("error", reject);
-        });
-    }
     /**
      * 파일 다운로드를 위한 파일 조회
      */
