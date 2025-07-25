@@ -95,7 +95,7 @@ export class FileController {
     @Post("/upload/chunk")
     async uploadChunk(@Req() req: Request, @Res() res: Response): Promise<void> {
         const form = new IncomingForm({
-            maxFileSize: 10 * 1024 * 1024, // 10MB
+            maxFileSize: 8 * 1024 * 1024, // 10MB
             multiples: false,
             maxFields: 5,
             maxFieldsSize: 1024,
