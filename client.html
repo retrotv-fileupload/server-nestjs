@@ -84,6 +84,15 @@
                 background-color: #da190b;
             }
 
+            .btn-pause {
+                background-color: #ff9800;
+                color: white;
+            }
+
+            .btn-pause:hover {
+                background-color: #e68900;
+            }
+
             .btn-disabled {
                 background-color: #cccccc;
                 color: #666;
@@ -183,6 +192,7 @@
 
                 <div class="controls">
                     <button id="uploadBtn" class="btn-primary" onclick="startUpload()">📤 업로드 시작</button>
+                    <button id="pauseBtn" class="btn-pause btn-disabled" onclick="togglePause()">⏸️ 일시정지</button>
                     <button id="cancelBtn" class="btn-secondary btn-disabled" onclick="cancelUpload()">
                         ❌ 업로드 취소
                     </button>
@@ -223,6 +233,10 @@
             let sessionId = null;
             let statusInterval = null;
             let isUploading = false;
+            let isPaused = false;
+            let uploadController = null; // AbortController for pausing uploads
+            let currentFile = null;
+            let totalChunks = 0;
 
             const CHUNK_SIZE = 2 * 1024 * 1024; // 2MB 청크 크기
             const API_BASE = "http://localhost:3000";
@@ -264,18 +278,45 @@
             }
 
             // 버튼 상태 관리
-            function setButtonStates(uploading) {
+            function setButtonStates(uploading, paused = false) {
                 const uploadBtn = document.getElementById("uploadBtn");
+                const pauseBtn = document.getElementById("pauseBtn");
                 const cancelBtn = document.getElementById("cancelBtn");
 
                 if (uploading) {
                     uploadBtn.className = "btn-primary btn-disabled";
                     uploadBtn.textContent = "⏳ 업로드 중...";
+                    pauseBtn.className = paused ? "btn-primary" : "btn-pause";
+                    pauseBtn.textContent = paused ? "▶️ 재개" : "⏸️ 일시정지";
                     cancelBtn.className = "btn-secondary";
                 } else {
                     uploadBtn.className = "btn-primary";
                     uploadBtn.textContent = "📤 업로드 시작";
+                    pauseBtn.className = "btn-pause btn-disabled";
+                    pauseBtn.textContent = "⏸️ 일시정지";
                     cancelBtn.className = "btn-secondary btn-disabled";
+                }
+            }
+
+            // 일시정지/재개 토글
+            function togglePause() {
+                if (!isUploading) return;
+
+                isPaused = !isPaused;
+                setButtonStates(isUploading, isPaused);
+
+                if (isPaused) {
+                    if (uploadController) {
+                        uploadController.abort();
+                    }
+                    updateStatus("업로드가 일시정지되었습니다.", "info");
+                    log("⏸️ 업로드 일시정지", "info");
+                    document.getElementById("statusText").textContent = "일시정지";
+                } else {
+                    updateStatus("업로드를 재개합니다...", "info");
+                    log("▶️ 업로드 재개", "info");
+                    document.getElementById("statusText").textContent = "재개 중";
+                    resumeUpload();
                 }
             }
 
@@ -292,7 +333,9 @@
 
                         if (response.ok) {
                             updateProgress(data.progress, data.uploadedChunks, data.totalChunks);
-                            document.getElementById("statusText").textContent = data.status;
+                            if (!isPaused) {
+                                document.getElementById("statusText").textContent = data.status;
+                            }
 
                             if (data.progress === 100 && data.status === "all_chunks_uploaded") {
                                 log("모든 청크 업로드 완료! 파일 병합을 시작합니다.", "success");
@@ -327,14 +370,15 @@
                     return;
                 }
 
+                currentFile = file;
+                totalChunks = Math.ceil(file.size / CHUNK_SIZE);
                 isUploading = true;
-                setButtonStates(true);
+                isPaused = false;
+                setButtonStates(true, false);
 
                 // 파일 정보 표시
                 document.getElementById("fileSizeText").textContent = formatFileSize(file.size);
                 document.getElementById("statusText").textContent = "초기화 중";
-
-                const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
                 log(`업로드 시작: ${file.name} (${formatFileSize(file.size)}, ${totalChunks}개 청크)`);
 
@@ -365,107 +409,233 @@
                     // 2. 상태 모니터링 시작
                     startStatusMonitoring();
 
-                    // 3. 청크 업로드
-                    updateStatus("파일을 청크 단위로 업로드하는 중...");
+                    // 3. 청크 업로드 시작
+                    await performChunkUpload();
+                } catch (error) {
+                    if (error.message !== "Upload paused") {
+                        updateStatus(`업로드 실패: ${error.message}`, "error");
+                        log(`업로드 실패: ${error.message}`, "error");
+                    }
+                } finally {
+                    if (!isPaused) {
+                        isUploading = false;
+                        setButtonStates(false, false);
+                        stopStatusMonitoring();
+                        sessionId = null;
+                    }
+                }
+            }
 
-                    for (let i = 0; i < totalChunks; i++) {
-                        if (!isUploading) break; // 취소된 경우
+            // 업로드 재개 함수
+            async function resumeUpload() {
+                if (!sessionId || !currentFile) {
+                    updateStatus("재개할 업로드 세션이 없습니다.", "error");
+                    return;
+                }
 
-                        const start = i * CHUNK_SIZE;
-                        const end = Math.min(start + CHUNK_SIZE, file.size);
-                        const chunk = file.slice(start, end);
+                isPaused = false;
+                setButtonStates(true, false);
 
-                        const formData = new FormData();
-                        formData.append("sessionId", sessionId);
-                        formData.append("chunkIndex", i);
-                        formData.append("chunk", chunk);
+                try {
+                    await performChunkUpload();
+                } catch (error) {
+                    if (error.message !== "Upload paused") {
+                        updateStatus(`업로드 재개 실패: ${error.message}`, "error");
+                        log(`업로드 재개 실패: ${error.message}`, "error");
+                    }
+                } finally {
+                    if (!isPaused) {
+                        isUploading = false;
+                        setButtonStates(false, false);
+                        stopStatusMonitoring();
+                        sessionId = null;
+                    }
+                }
+            }
 
-                        let retryCount = 0;
-                        const maxRetries = 3;
+            // 실제 청크 업로드 수행 함수
+            async function performChunkUpload() {
+                updateStatus("파일을 청크 단위로 업로드하는 중...");
 
-                        while (retryCount <= maxRetries) {
-                            try {
-                                const response = await fetch(`${API_BASE}/api/files/upload/chunk`, {
-                                    method: "POST",
-                                    body: formData,
-                                });
+                // 현재 상태 확인하여 업로드된 청크 파악
+                let uploadedChunks = new Set();
+                try {
+                    const statusResponse = await fetch(`${API_BASE}/api/files/upload/status?sessionId=${sessionId}`);
+                    if (statusResponse.ok) {
+                        const statusData = await statusResponse.json();
 
-                                const result = await response.json();
+                        log(`상태 조회: ${statusData.uploadedChunks}/${statusData.totalChunks} 청크 업로드됨`);
+                        log(`누락된 청크 개수: ${statusData.missingChunks ? statusData.missingChunks.length : 0}`);
 
-                                if (!response.ok) {
-                                    throw new Error(result.error || "청크 업로드 실패");
+                        // 서버에서 업로드된 청크 수를 직접 사용
+                        if (statusData.missingChunks && Array.isArray(statusData.missingChunks)) {
+                            // 누락된 청크 목록으로부터 업로드된 청크 계산
+                            const missingChunks = new Set(statusData.missingChunks);
+                            for (let i = 0; i < totalChunks; i++) {
+                                if (!missingChunks.has(i)) {
+                                    uploadedChunks.add(i);
                                 }
-
-                                log(`청크 ${i + 1}/${totalChunks} 업로드 완료 (${result.progress}%)`);
-
-                                // 즉시 진행률 업데이트
-                                updateProgress(result.progress, result.uploadedChunks, result.totalChunks);
-
-                                // 모든 청크가 완료되었는지 확인
-                                if (result.isComplete) {
-                                    log("🎉 모든 청크 업로드 완료!", "success");
-                                    updateStatus("모든 청크 업로드 완료! 파일 병합 준비 중...", "success");
-                                }
-
-                                break;
-                            } catch (error) {
-                                retryCount++;
-                                if (retryCount > maxRetries) {
-                                    throw new Error(
-                                        `청크 ${i} 업로드 실패 (재시도 ${maxRetries}회 실패): ${error.message}`,
-                                    );
-                                }
-                                log(
-                                    `청크 ${i} 업로드 실패, 재시도 ${retryCount}/${maxRetries}... 에러: ${error.message}`,
-                                    "error",
-                                );
-
-                                // 응답 상태 코드와 본문을 로그로 출력
-                                if (error.response) {
-                                    log(`응답 상태: ${error.response.status}`, "error");
-                                    log(`응답 본문: ${await error.response.text()}`, "error");
-                                }
-
-                                await new Promise(resolve => setTimeout(resolve, 1000)); // 1초 대기
                             }
                         }
+
+                        if (uploadedChunks.size > 0) {
+                            log(`재개: ${uploadedChunks.size}/${totalChunks} 청크가 이미 업로드됨`);
+                        }
+                    } else {
+                        log(`상태 확인 실패: HTTP ${statusResponse.status}`, "error");
+                    }
+                } catch (error) {
+                    log(`상태 확인 실패, 처음부터 업로드: ${error.message}`, "error");
+                }
+
+                // AbortController로 일시정지 지원
+                uploadController = new AbortController();
+
+                // 순차적으로 청크 업로드 (동시성 문제 해결)
+                for (let i = 0; i < totalChunks; i++) {
+                    // 이미 업로드된 청크는 건너뛰기
+                    if (uploadedChunks.has(i)) {
+                        log(`청크 ${i + 1}/${totalChunks} 건너뛰기 (이미 업로드됨)`);
+                        continue;
+                    }
+
+                    if (isPaused) {
+                        log("업로드가 일시정지되었습니다.", "info");
+                        throw new Error("Upload paused");
                     }
 
                     if (!isUploading) {
-                        updateStatus("업로드가 취소되었습니다.", "error");
-                        return;
+                        log("업로드가 취소되었습니다.", "info");
+                        break;
                     }
 
-                    // 짧은 대기 시간 추가하여 상태 모니터링이 마지막 상태를 확인할 수 있도록 함
-                    await new Promise(resolve => setTimeout(resolve, 500));
-
-                    // 4. 업로드 완료 처리
-                    updateStatus("파일 병합 중...");
-                    log("모든 청크 업로드 완료, 파일 병합을 시작합니다...");
-
-                    const completeResponse = await fetch(`${API_BASE}/api/files/upload/complete`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ sessionId }),
-                    });
-
-                    const completeData = await completeResponse.json();
-
-                    if (!completeResponse.ok) {
-                        throw new Error(completeData.error || "완료 처리 실패");
+                    // 청크 업로드 시도
+                    log(`청크 ${i + 1}/${totalChunks} 업로드 시작...`);
+                    const success = await uploadSingleChunk(i);
+                    if (!success) {
+                        throw new Error(`청크 ${i} 업로드에 실패했습니다.`);
                     }
-
-                    updateStatus(`업로드 완료! 파일 ID: ${completeData.file.id}`, "success");
-                    log(`✅ 업로드 성공: ${completeData.file.downloadUrl}`, "success");
-                } catch (error) {
-                    updateStatus(`업로드 실패: ${error.message}`, "error");
-                    log(`업로드 실패: ${error.message}`, "error");
-                } finally {
-                    isUploading = false;
-                    setButtonStates(false);
-                    stopStatusMonitoring();
-                    sessionId = null;
                 }
+
+                if (isPaused) {
+                    return; // 일시정지된 경우 여기서 중단
+                }
+
+                if (!isUploading) {
+                    updateStatus("업로드가 취소되었습니다.", "error");
+                    return;
+                }
+
+                // 최종 상태 확인
+                log("모든 청크 업로드 완료, 최종 상태를 확인합니다...");
+                try {
+                    const finalStatusResponse = await fetch(
+                        `${API_BASE}/api/files/upload/status?sessionId=${sessionId}`,
+                    );
+                    if (finalStatusResponse.ok) {
+                        const finalStatusData = await finalStatusResponse.json();
+                        log(
+                            `최종 상태: ${finalStatusData.uploadedChunks}/${finalStatusData.totalChunks} 청크 업로드됨`,
+                        );
+
+                        if (finalStatusData.missingChunks && finalStatusData.missingChunks.length > 0) {
+                            log(
+                                `경고: ${finalStatusData.missingChunks.length}개의 청크가 누락됨: [${finalStatusData.missingChunks.slice(0, 5).join(", ")}${finalStatusData.missingChunks.length > 5 ? "..." : ""}]`,
+                                "error",
+                            );
+                            throw new Error(`Missing ${finalStatusData.missingChunks.length} chunks`);
+                        }
+                    }
+                } catch (error) {
+                    log(`최종 상태 확인 실패: ${error.message}`, "error");
+                    throw error;
+                }
+
+                // 짧은 대기 시간 추가하여 상태 모니터링이 마지막 상태를 확인할 수 있도록 함
+                await new Promise(resolve => setTimeout(resolve, 500));
+
+                // 4. 업로드 완료 처리
+                updateStatus("파일 병합 중...");
+                log("모든 청크 업로드 완료, 파일 병합을 시작합니다...");
+
+                const completeResponse = await fetch(`${API_BASE}/api/files/upload/complete`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ sessionId }),
+                });
+
+                const completeData = await completeResponse.json();
+
+                if (!completeResponse.ok) {
+                    throw new Error(completeData.error || `HTTP ${completeResponse.status}: 완료 처리 실패`);
+                }
+
+                updateStatus(`업로드 완료! 파일 ID: ${completeData.file.id}`, "success");
+                log(`✅ 업로드 성공: ${completeData.file.downloadUrl}`, "success");
+            }
+
+            // 단일 청크 업로드 함수
+            async function uploadSingleChunk(chunkIndex) {
+                const start = chunkIndex * CHUNK_SIZE;
+                const end = Math.min(start + CHUNK_SIZE, currentFile.size);
+                const chunk = currentFile.slice(start, end);
+
+                const formData = new FormData();
+                formData.append("sessionId", sessionId);
+                formData.append("chunkIndex", chunkIndex);
+                formData.append("chunk", chunk);
+
+                const maxRetries = 3;
+
+                for (let retryCount = 0; retryCount <= maxRetries; retryCount++) {
+                    if (isPaused) {
+                        throw new Error("Upload paused");
+                    }
+
+                    try {
+                        const response = await fetch(`${API_BASE}/api/files/upload/chunk`, {
+                            method: "POST",
+                            body: formData,
+                            signal: uploadController.signal,
+                        });
+
+                        const result = await response.json();
+
+                        if (!response.ok) {
+                            throw new Error(result.error || `HTTP ${response.status}: 청크 업로드 실패`);
+                        }
+
+                        log(`청크 ${chunkIndex + 1}/${totalChunks} 업로드 완료 (${result.progress}%)`);
+
+                        // 즉시 진행률 업데이트
+                        updateProgress(result.progress, result.uploadedChunks, result.totalChunks);
+
+                        // 모든 청크가 완료되었는지 확인
+                        if (result.isComplete) {
+                            log("🎉 모든 청크 업로드 완료!", "success");
+                            updateStatus("모든 청크 업로드 완료! 파일 병합 준비 중...", "success");
+                        }
+
+                        return true; // 성공
+                    } catch (error) {
+                        if (error.name === "AbortError" || isPaused) {
+                            throw new Error("Upload paused");
+                        }
+
+                        if (retryCount < maxRetries) {
+                            log(
+                                `청크 ${chunkIndex} 업로드 실패 (재시도 ${retryCount + 1}/${maxRetries}): ${error.message}`,
+                                "error",
+                            );
+                            await new Promise(resolve => setTimeout(resolve, 1000)); // 1초 대기
+                        } else {
+                            log(`청크 ${chunkIndex} 업로드 최종 실패: ${error.message}`, "error");
+                            return false; // 실패
+                        }
+                    }
+                }
+
+                return false; // 모든 재시도 실패
             }
 
             // 업로드 취소
@@ -490,11 +660,15 @@
                     log(`취소 요청 실패: ${error.message}`, "error");
                 } finally {
                     isUploading = false;
-                    setButtonStates(false);
+                    isPaused = false;
+                    setButtonStates(false, false);
                     stopStatusMonitoring();
                     sessionId = null;
                     updateProgress(0, 0, 0);
                     document.getElementById("statusText").textContent = "취소됨";
+                    if (uploadController) {
+                        uploadController.abort();
+                    }
                 }
             }
 
@@ -507,7 +681,7 @@
 
             // 페이지 종료 시 정리
             window.addEventListener("beforeunload", e => {
-                if (isUploading) {
+                if (isUploading && !isPaused) {
                     e.preventDefault();
                     e.returnValue = "업로드가 진행 중입니다. 페이지를 떠나시겠습니까?";
                 }

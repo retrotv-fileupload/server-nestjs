@@ -178,7 +178,7 @@ export class FileService {
 
             // 청크 파일 저장
             const chunkPath = path.join(session.tempDir, `chunk_${chunkIndex.toString().padStart(6, "0")}`);
-            fs.promises.writeFile(chunkPath, chunkBuffer);
+            await fs.promises.writeFile(chunkPath, chunkBuffer);
 
             // 청크 등록
             session.uploadedChunks.add(chunkIndex);
@@ -263,7 +263,20 @@ export class FileService {
             throw new Error("Upload session not found");
         }
 
+        this.logger.debug(
+            `[STATUS] Session ${sessionId}: ${session.uploadedChunks.size}/${session.totalChunks} chunks, ${session.totalChunks - session.uploadedChunks.size} missing`,
+        );
+
         if (session.uploadedChunks.size !== session.totalChunks) {
+            const missingChunks = [];
+            for (let i = 0; i < session.totalChunks; i++) {
+                if (!session.uploadedChunks.has(i)) {
+                    missingChunks.push(i);
+                }
+            }
+            this.logger.error(
+                `[COMPLETE ERROR] Missing chunks: [${missingChunks.slice(0, 10).join(", ")}${missingChunks.length > 10 ? "..." : ""}]`,
+            );
             throw new Error("Missing chunks");
         }
 
@@ -331,7 +344,7 @@ export class FileService {
             progress,
             uploadedChunks: session.uploadedChunks.size,
             totalChunks: session.totalChunks,
-            missingChunks: missingChunks.slice(0, 10), // 최대 10개만 반환
+            missingChunks: missingChunks, // 모든 누락 청크 반환
             fileName: session.fileName,
             fileSize: session.fileSize,
             lastActivity: session.lastActivity,
