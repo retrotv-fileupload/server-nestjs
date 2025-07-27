@@ -1,4 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
+
 import { FileRepository } from "./file.repository";
 import * as fs from "fs";
 import * as path from "path";
@@ -10,7 +11,9 @@ import { UploadSession, ChunkUploadResponse, FileInfo, UploadStatusResponse } fr
 @Injectable()
 export class FileService {
     private readonly logger = new Logger(FileService.name);
-    private readonly UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(process.cwd(), "uploads");
+    private readonly UPLOAD_DIR = process.env.UPLOAD_DIR || process.platform === "win32"
+        ? "C:\\GitRepo\\fileupload\\uploads"
+        : "/Users/yjj8353/Desktop/git/GitRepo/Gitlab/fileserver/uploads"
     private readonly TEMP_DIR = path.join(this.UPLOAD_DIR, "temp");
     private readonly MAX_CONCURRENT_UPLOADS = 5;
 
@@ -384,14 +387,6 @@ export class FileService {
      * 서비스 시작 시 초기화
      */
     onModuleInit() {
-        // 업로드 디렉토리 생성
-        [this.UPLOAD_DIR, this.TEMP_DIR].forEach(dir => {
-            if (!fs.existsSync(dir)) {
-                fs.mkdirSync(dir, { recursive: true });
-                this.logger.log(`Created directory: ${dir}`);
-            }
-        });
-
         // 정기적으로 만료된 세션 정리 (5분마다)
         setInterval(
             () => {

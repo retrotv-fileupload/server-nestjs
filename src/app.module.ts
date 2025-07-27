@@ -3,8 +3,8 @@ import { ConfigModule, ConfigService } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { AppController } from "./app.controller";
 import { AppService } from "./app.service";
-import { FileModule } from "./domain/file/file.module";
-import { FileEntity } from "./domain/file/file.entity";
+import { FileModule } from "./domain/file";
+import { FileEntity } from "./domain/file";
 
 @Module({
     imports: [
@@ -22,7 +22,7 @@ import { FileEntity } from "./domain/file/file.entity";
                         type: "sqlite",
                         database: configService.get("DB_DATABASE") || "./fileserver.db",
                         entities: [FileEntity],
-                        synchronize: configService.get("NODE_ENV") === "development",
+                        synchronize: configService.get("NODE_ENV") === "dev",
                     };
                 }
 
@@ -34,7 +34,7 @@ import { FileEntity } from "./domain/file/file.entity";
                     password: configService.get("DB_PASSWORD"),
                     database: configService.get("DB_DATABASE"),
                     entities: [FileEntity],
-                    synchronize: configService.get("NODE_ENV") === "development",
+                    synchronize: configService.get("NODE_ENV") === "dev",
                 };
             },
             inject: [ConfigService],

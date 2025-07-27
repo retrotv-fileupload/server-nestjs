@@ -8,6 +8,9 @@ import { FileInfo, InitUploadDto, UploadStatusResponse } from "src/common/types/
 @Controller("/api/files")
 export class FileController {
     private readonly logger = new Logger(FileController.name);
+    private readonly UPLOAD_DIR = process.env.UPLOAD_DIR || process.platform === "win32"
+        ? "C:\\GitRepo\\fileupload\\uploads"
+        : "/Users/yjj8353/Desktop/git/GitRepo/Gitlab/fileserver/uploads"
 
     constructor(private readonly fileService: FileService) {}
 
@@ -92,7 +95,7 @@ export class FileController {
             multiples: false,
             maxFields: 5,
             maxFieldsSize: 1024,
-            uploadDir: "/Users/yjj8353/Desktop/git/GitRepo/Gitlab/fileserver/uploads", // 업로드 폴더 제한
+            uploadDir: this.UPLOAD_DIR, // 업로드 폴더 제한
             keepExtensions: false,
         });
 
