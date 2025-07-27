@@ -1,16 +1,9 @@
 import { Controller, Delete, Get, Post, Req, Res, Body, HttpStatus, Logger, Param, Query } from "@nestjs/common";
 import { Request, Response } from "express";
-import { FileService, UploadStatusResponse, FileInfo } from "./file.service";
+import { FileService } from "./file.service";
 import * as fs from "fs";
 import { IncomingForm } from "formidable";
-
-// 초기화 요청 DTO
-interface InitUploadDto {
-    fileName: string;
-    fileSize: number;
-    totalChunks: number;
-    mimeType?: string;
-}
+import { FileInfo, InitUploadDto, UploadStatusResponse } from "src/common/types/file";
 
 @Controller("/api/files")
 export class FileController {

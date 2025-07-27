@@ -4,53 +4,8 @@ import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
 
-import { FileUtils } from "../../common/utils/file.utils";
-
-// 업로드 세션 인터페이스
-export interface UploadSession {
-    sessionId: string;
-    fileName: string;
-    fileSize: number;
-    totalChunks: number;
-    mimeType: string;
-    tempDir: string;
-    uploadedChunks: Set<number>;
-    status: "initialized" | "uploading" | "all_chunks_uploaded" | "merging" | "completed" | "failed";
-    createdAt: number;
-    lastActivity: number;
-}
-
-export interface FileInfo {
-    id: string;
-    fileName: string;
-    fileSize: number;
-    mimeType: string;
-    uploadDate: string;
-    downloadUrl: string;
-}
-
-export interface UploadStatusResponse {
-    sessionId: string;
-    status: string;
-    progress: number;
-    uploadedChunks: number;
-    totalChunks: number;
-    missingChunks: number[];
-    fileName: string;
-    fileSize: number;
-    lastActivity: number;
-}
-
-export interface ChunkUploadResponse {
-    success: boolean;
-    message: string;
-    chunkIndex: number;
-    progress: number;
-    uploadedChunks: number;
-    totalChunks: number;
-    status: string;
-    isComplete: boolean;
-}
+import { FileUtils } from "../../common/utils/file";
+import { UploadSession, ChunkUploadResponse, FileInfo, UploadStatusResponse } from "src/common/types/file";
 
 @Injectable()
 export class FileService {
