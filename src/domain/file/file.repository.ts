@@ -2,7 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
 import { Repository, FindManyOptions } from "typeorm";
 
-import { FileEntity } from "./file.entity";
+import { FileEntity } from "src/domain/file/file.entity";
 
 @Injectable()
 export class FileRepository {

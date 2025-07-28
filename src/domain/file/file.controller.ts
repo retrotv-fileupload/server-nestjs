@@ -3,14 +3,9 @@ import { IncomingForm } from "formidable";
 import { Request, Response } from "express";
 import { Controller, Delete, Get, Post, Req, Res, Body, HttpStatus, Logger, Param, Query } from "@nestjs/common";
 
-import { FileService } from "./file.service";
-import { FileInfo, InitUploadDto, UploadStatusResponse } from "../../common/types/file";
-import {
-    sendBadRequest,
-    sendInternalServerError,
-    sendNotFound,
-    sendTooManyRequests,
-} from "../../common/utils/response";
+import { FileService } from "src/domain/file/file.service";
+import { FileInfo, InitUploadDto, UploadStatusResponse } from "src/common/types/file";
+import { sendBadRequest, sendInternalServerError, sendNotFound, sendTooManyRequests } from "src/common/utils/response";
 
 @Controller("/api/files")
 export class FileController {

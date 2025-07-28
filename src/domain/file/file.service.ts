@@ -4,9 +4,9 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 
-import { FileUtils } from "../../common/utils/file";
-import { FileRepository } from "./file.repository";
-import { UploadSession, ChunkUploadResponse, FileInfo, UploadStatusResponse } from "../../common/types/file";
+import { FileUtils } from "src/common/utils/file";
+import { FileRepository } from "src/domain/file/file.repository";
+import { UploadSession, ChunkUploadResponse, FileInfo, UploadStatusResponse } from "src/common/types/file";
 
 @Injectable()
 export class FileService {
