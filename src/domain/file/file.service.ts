@@ -1,11 +1,11 @@
 import { Injectable, Logger } from "@nestjs/common";
 
-import { FileRepository } from "./file.repository";
-import * as fs from "fs";
-import * as path from "path";
-import * as crypto from "crypto";
+import fs from "fs";
+import path from "path";
+import crypto from "crypto";
 
 import { FileUtils } from "../../common/utils/file";
+import { FileRepository } from "./file.repository";
 import { UploadSession, ChunkUploadResponse, FileInfo, UploadStatusResponse } from "src/common/types/file";
 
 @Injectable()

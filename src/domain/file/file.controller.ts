@@ -1,8 +1,9 @@
+import fs from "fs";
 import { Controller, Delete, Get, Post, Req, Res, Body, HttpStatus, Logger, Param, Query } from "@nestjs/common";
 import { Request, Response } from "express";
-import { FileService } from "./file.service";
-import * as fs from "fs";
+
 import { IncomingForm } from "formidable";
+import { FileService } from "./file.service";
 import { FileInfo, InitUploadDto, UploadStatusResponse } from "src/common/types/file";
 import {
     sendBadRequest,
