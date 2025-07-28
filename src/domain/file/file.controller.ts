@@ -4,6 +4,12 @@ import { FileService } from "./file.service";
 import * as fs from "fs";
 import { IncomingForm } from "formidable";
 import { FileInfo, InitUploadDto, UploadStatusResponse } from "src/common/types/file";
+import {
+    sendBadRequest,
+    sendInternalServerError,
+    sendNotFound,
+    sendTooManyRequests,
+} from "../../common/utils/response";
 
 @Controller("/api/files")
 export class FileController {
@@ -11,23 +17,12 @@ export class FileController {
 
     constructor(private readonly fileService: FileService) {}
 
-    private sendError(res: Response, statusCode: number, message: string): void {
-        if (!res.headersSent) {
-            res.status(statusCode).json({
-                success: false,
-                error: message,
-                timestamp: new Date().toISOString(),
-            });
-        }
-    }
-
     @Get("/download/:id")
     async downloadFile(@Param("id") id: string, @Res() res: Response): Promise<void> {
         try {
             const fileInfo = await this.fileService.getFileForDownload(id);
-
             if (!fileInfo) {
-                return this.sendError(res, HttpStatus.NOT_FOUND, "File not found");
+                return sendNotFound(res, "파일을 찾을 수 없습니다.");
             }
 
             const stat = fs.statSync(fileInfo.filePath);
@@ -44,14 +39,14 @@ export class FileController {
             this.logger.log(`[DOWNLOAD] File: ${fileInfo.originalName}`);
         } catch (error) {
             this.logger.error(`[DOWNLOAD ERROR] ${error}`);
-            this.sendError(res, HttpStatus.INTERNAL_SERVER_ERROR, "Download failed");
+            sendInternalServerError(res, "다운로드에 실패 했습니다.");
         }
     }
 
     @Get("/upload/status")
     async getStatus(@Query("sessionId") sessionId: string, @Res() res: Response): Promise<void> {
         if (!sessionId) {
-            return this.sendError(res, HttpStatus.BAD_REQUEST, "Session ID is required");
+            return sendBadRequest(res, "세션 ID는 필수입니다.");
         }
 
         try {
@@ -59,7 +54,7 @@ export class FileController {
             res.status(HttpStatus.OK).json(status);
         } catch (error) {
             this.logger.error(`[STATUS ERROR] ${error}`);
-            this.sendError(res, HttpStatus.NOT_FOUND, error.message);
+            sendNotFound(res, error.message);
         }
     }
 
@@ -69,7 +64,7 @@ export class FileController {
             const { fileName, fileSize, totalChunks, mimeType } = initData;
 
             if (!fileName || !fileSize || !totalChunks) {
-                return this.sendError(res, HttpStatus.BAD_REQUEST, "Missing required fields");
+                return sendBadRequest(res, "필수 필드가 누락되었습니다.");
             }
 
             const sessionId = await this.fileService.initializeUploadSession(fileName, fileSize, totalChunks, mimeType);
@@ -81,7 +76,7 @@ export class FileController {
             });
         } catch (error) {
             this.logger.error(`[INIT ERROR] ${error}`);
-            this.sendError(res, HttpStatus.BAD_REQUEST, "Failed to initialize upload session");
+            sendBadRequest(res, "업로드 세션 초기화에 실패했습니다.");
         }
     }
 
@@ -99,7 +94,7 @@ export class FileController {
         form.parse(req, async (err: any, fields: any, files: any) => {
             if (err) {
                 this.logger.error(`[CHUNK ERROR] ${err.message}`);
-                return this.sendError(res, HttpStatus.BAD_REQUEST, `Chunk upload failed: ${err.message}`);
+                return sendBadRequest(res, `청크 업로드 실패: ${err.message}`);
             }
 
             try {
@@ -108,12 +103,12 @@ export class FileController {
                 const chunkFile = Array.isArray(files.chunk) ? files.chunk[0] : files.chunk;
 
                 if (!sessionId || chunkIndex === undefined || !chunkFile) {
-                    return this.sendError(res, HttpStatus.BAD_REQUEST, "Missing required fields");
+                    return sendBadRequest(res, "필수 필드가 누락되었습니다.");
                 }
 
                 const chunkIdx = parseInt(chunkIndex);
                 if (isNaN(chunkIdx)) {
-                    return this.sendError(res, HttpStatus.BAD_REQUEST, `Invalid chunk index: ${chunkIndex}`);
+                    return sendBadRequest(res, `유효하지 않은 청크 인덱스: ${chunkIndex}`);
                 }
 
                 // 파일 데이터 읽기
@@ -128,11 +123,11 @@ export class FileController {
             } catch (error) {
                 this.logger.error(`[CHUNK SAVE ERROR] ${error}`);
                 if (error.message === "Too many concurrent uploads") {
-                    this.sendError(res, HttpStatus.TOO_MANY_REQUESTS, error.message);
+                    sendTooManyRequests(res, "한 번에 너무 많은 업로드가 요청이 들어왔습니다.");
                 } else if (error.message === "Upload session not found") {
-                    this.sendError(res, HttpStatus.NOT_FOUND, error.message);
+                    sendNotFound(res, "업로드 세션을 찾을 수 없습니다.");
                 } else {
-                    this.sendError(res, HttpStatus.INTERNAL_SERVER_ERROR, "Failed to save chunk");
+                    sendInternalServerError(res, "청크 저장에 실패했습니다.");
                 }
             }
         });
@@ -142,9 +137,8 @@ export class FileController {
     async uploadComplete(@Body() body: { sessionId: string }, @Res() res: Response): Promise<void> {
         try {
             const { sessionId } = body;
-
             if (!sessionId) {
-                return this.sendError(res, HttpStatus.BAD_REQUEST, "Session ID is required");
+                return sendBadRequest(res, "세션 ID는 필수입니다.");
             }
 
             const fileInfo: FileInfo = await this.fileService.completeUpload(sessionId);
@@ -157,11 +151,11 @@ export class FileController {
         } catch (error) {
             this.logger.error(`[COMPLETE ERROR] ${error}`);
             if (error.message === "Upload session not found") {
-                this.sendError(res, HttpStatus.NOT_FOUND, error.message);
+                sendNotFound(res, "업로드 세션을 찾을 수 없습니다.");
             } else if (error.message === "Missing chunks") {
-                this.sendError(res, HttpStatus.BAD_REQUEST, error.message);
+                sendBadRequest(res, "필요한 청크가 누락되었습니다.");
             } else {
-                this.sendError(res, HttpStatus.INTERNAL_SERVER_ERROR, "Failed to complete upload");
+                sendInternalServerError(res, "업로드 완료에 실패했습니다.");
             }
         }
     }
@@ -172,7 +166,7 @@ export class FileController {
             const { sessionId } = body;
 
             if (!sessionId) {
-                return this.sendError(res, HttpStatus.BAD_REQUEST, "Session ID is required");
+                return sendBadRequest(res, "세션 ID는 필수입니다.");
             }
 
             this.fileService.cancelUpload(sessionId);
@@ -184,9 +178,9 @@ export class FileController {
         } catch (error) {
             this.logger.error(`[CANCEL ERROR] ${error}`);
             if (error.message === "Upload session not found") {
-                this.sendError(res, HttpStatus.NOT_FOUND, error.message);
+                sendNotFound(res, "업로드 세션을 찾을 수 없습니다.");
             } else {
-                this.sendError(res, HttpStatus.INTERNAL_SERVER_ERROR, "Failed to cancel upload");
+                sendInternalServerError(res, "업로드 취소에 실패했습니다.");
             }
         }
     }
