@@ -11,9 +11,11 @@ import { UploadSession, ChunkUploadResponse, FileInfo, UploadStatusResponse } fr
 @Injectable()
 export class FileService {
     private readonly logger = new Logger(FileService.name);
-    private readonly UPLOAD_DIR = process.env.UPLOAD_DIR || process.platform === "win32"
-        ? "C:\\GitRepo\\fileupload\\uploads"
-        : "/Users/yjj8353/Desktop/git/GitRepo/Gitlab/fileserver/uploads"
+    private readonly UPLOAD_DIR =
+        process.env.UPLOAD_DIR ||
+        (process.platform === "win32"
+            ? "C:\\GitRepo\\fileupload\\uploads"
+            : "/Users/yjj8353/Desktop/git/GitRepo/Gitlab/fileserver/uploads");
     private readonly TEMP_DIR = path.join(this.UPLOAD_DIR, "temp");
     private readonly MAX_CONCURRENT_UPLOADS = 5;
 
@@ -237,6 +239,8 @@ export class FileService {
             );
             throw new Error("Missing chunks");
         }
+
+        this.logger.debug(`UPLOAD DIR: ${this.UPLOAD_DIR}`);
 
         session.status = "merging";
         const finalFileName = `${Date.now()}_${this.generateUniqueId()}_${session.fileName}`;

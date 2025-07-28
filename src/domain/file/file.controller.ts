@@ -14,9 +14,11 @@ import {
 @Controller("/api/files")
 export class FileController {
     private readonly logger = new Logger(FileController.name);
-    private readonly UPLOAD_DIR = process.env.UPLOAD_DIR || process.platform === "win32"
-        ? "C:\\GitRepo\\fileupload\\uploads"
-        : "/Users/yjj8353/Desktop/git/GitRepo/Gitlab/fileserver/uploads"
+    private readonly UPLOAD_DIR =
+        process.env.UPLOAD_DIR ||
+        (process.platform === "win32"
+            ? "C:\\GitRepo\\fileupload\\uploads"
+            : "/Users/yjj8353/Desktop/git/GitRepo/Gitlab/fileserver/uploads");
 
     constructor(private readonly fileService: FileService) {}
 
@@ -85,6 +87,8 @@ export class FileController {
 
     @Post("/upload/chunk")
     async uploadChunk(@Req() req: Request, @Res() res: Response): Promise<void> {
+        this.logger.debug(`UPLOAD DIR: ${this.UPLOAD_DIR}`);
+
         const form = new IncomingForm({
             maxFileSize: 8 * 1024 * 1024, // 10MB
             multiples: false,
