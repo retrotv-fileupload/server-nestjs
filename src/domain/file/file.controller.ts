@@ -1,10 +1,10 @@
 import fs from "fs";
-import { Controller, Delete, Get, Post, Req, Res, Body, HttpStatus, Logger, Param, Query } from "@nestjs/common";
-import { Request, Response } from "express";
-
 import { IncomingForm } from "formidable";
+import { Request, Response } from "express";
+import { Controller, Delete, Get, Post, Req, Res, Body, HttpStatus, Logger, Param, Query } from "@nestjs/common";
+
 import { FileService } from "./file.service";
-import { FileInfo, InitUploadDto, UploadStatusResponse } from "src/common/types/file";
+import { FileInfo, InitUploadDto, UploadStatusResponse } from "../../common/types/file";
 import {
     sendBadRequest,
     sendInternalServerError,

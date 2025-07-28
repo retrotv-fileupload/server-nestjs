@@ -6,7 +6,7 @@ import crypto from "crypto";
 
 import { FileUtils } from "../../common/utils/file";
 import { FileRepository } from "./file.repository";
-import { UploadSession, ChunkUploadResponse, FileInfo, UploadStatusResponse } from "src/common/types/file";
+import { UploadSession, ChunkUploadResponse, FileInfo, UploadStatusResponse } from "../../common/types/file";
 
 @Injectable()
 export class FileService {
