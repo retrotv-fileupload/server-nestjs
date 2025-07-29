@@ -150,7 +150,7 @@ export class FileService {
                 session.status = "uploading";
             }
 
-            this.logger.log(
+            this.logger.debug(
                 `[CHUNK] ${chunkIndex}/${session.totalChunks - 1} (${session.uploadedChunks.size}/${session.totalChunks})`,
             );
 

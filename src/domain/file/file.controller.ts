@@ -1,11 +1,17 @@
 import fs from "fs";
 import { IncomingForm } from "formidable";
 import { Request, Response } from "express";
-import { Controller, Delete, Get, Post, Req, Res, Body, HttpStatus, Logger, Param, Query } from "@nestjs/common";
+import { Controller, Delete, Get, Post, Req, Res, Body, Logger, Param, Query } from "@nestjs/common";
 
 import { FileService } from "src/domain/file/file.service";
 import { FileInfo, InitUploadDto, UploadStatusResponse } from "src/common/types/file";
-import { sendBadRequest, sendInternalServerError, sendNotFound, sendTooManyRequests } from "src/common/utils/response";
+import {
+    sendBadRequest,
+    sendInternalServerError,
+    sendNotFound,
+    sendOK,
+    sendTooManyRequests,
+} from "src/common/utils/response";
 import { FileUtils } from "src/common/utils/file";
 
 @Controller("/api/files")
@@ -28,7 +34,6 @@ export class FileController {
             this.logger.debug(`[DOWNLOAD] User-Agent: ${userAgent}`);
 
             if (!fileInfo) {
-                this.logger.debug(`[DOWNLOAD] ${id} 파일이 없습니다.`);
                 return sendNotFound(res, "파일을 찾을 수 없습니다.");
             }
 
@@ -40,8 +45,8 @@ export class FileController {
             this.logger.debug(`[DOWNLOAD] Content-Type: ${contentType}`);
             this.logger.debug(`[DOWNLOAD] Content-Length: ${contentLength}`);
             this.logger.debug(`[DOWNLOAD] Content-Disposition: ${contentDisposition}`);
-            this.logger.debug(`[DOWNLOAD] Saved filename: ${fileInfo.savedFileName}`);
-            this.logger.debug(`[DOWNLOAD] Original filename: ${fileInfo.originalFileName}`);
+            this.logger.debug(`[DOWNLOAD] Saved file name: ${fileInfo.savedFileName}`);
+            this.logger.debug(`[DOWNLOAD] Original file name: ${fileInfo.originalFileName}`);
 
             res.set({
                 "Content-Type": contentType,
@@ -59,13 +64,19 @@ export class FileController {
 
     @Get("/upload/status")
     async getStatus(@Query("sessionId") sessionId: string, @Res() res: Response): Promise<void> {
+        this.logger.debug(`[STATUS] 세션 ID: ${sessionId}`);
+
         if (!sessionId) {
+            this.logger.debug(`[STATUS] 세션 ID가 제공되지 않았습니다.`);
             return sendBadRequest(res, "세션 ID는 필수입니다.");
         }
 
         try {
             const status: UploadStatusResponse = this.fileService.getUploadStatus(sessionId);
-            res.status(HttpStatus.OK).json(status);
+            this.logger.debug(
+                `[STATUS] 파일명: ${status.fileName}, 청크: ${status.uploadedChunks}/${status.totalChunks}, 진행도: ${status.progress}%`,
+            );
+            sendOK(res, null, status);
         } catch (error) {
             this.logger.error(`[STATUS ERROR] ${error}`);
             sendNotFound(res, error.message);
@@ -77,17 +88,18 @@ export class FileController {
         try {
             const { fileName, fileSize, totalChunks, mimeType } = initData;
 
+            this.logger.debug(`[INIT] 파일명: ${fileName}`);
+            this.logger.debug(`[INIT] 파일 크기: ${fileSize}`);
+            this.logger.debug(`[INIT] 총 청크 수: ${totalChunks}`);
+            this.logger.debug(`[INIT] MIME 타입: ${mimeType}`);
+
             if (!fileName || !fileSize || !totalChunks) {
                 return sendBadRequest(res, "필수 필드가 누락되었습니다.");
             }
 
             const sessionId = await this.fileService.initializeUploadSession(fileName, fileSize, totalChunks, mimeType);
-
-            res.status(HttpStatus.OK).json({
-                success: true,
-                sessionId: sessionId,
-                message: "Upload session initialized",
-            });
+            this.logger.debug(`[INIT] 세션 ID: ${sessionId}`);
+            sendOK(res, "업로드 세션 설정 완료", { sessionId });
         } catch (error) {
             this.logger.error(`[INIT ERROR] ${error}`);
             sendBadRequest(res, "업로드 세션 초기화에 실패했습니다.");
@@ -96,10 +108,8 @@ export class FileController {
 
     @Post("/upload/chunk")
     async uploadChunk(@Req() req: Request, @Res() res: Response): Promise<void> {
-        this.logger.debug(`UPLOAD DIR: ${this.UPLOAD_DIR}`);
-
         const form = new IncomingForm({
-            maxFileSize: 8 * 1024 * 1024, // 10MB
+            maxFileSize: 8 * 1024 * 1024,
             multiples: false,
             maxFields: 5,
             maxFieldsSize: 1024,
@@ -135,7 +145,7 @@ export class FileController {
 
                 const result = await this.fileService.processChunkUpload(sessionId, chunkIdx, chunkBuffer);
 
-                res.status(HttpStatus.OK).json(result);
+                sendOK(res, "SUCCESS", result);
             } catch (error) {
                 this.logger.error(`[CHUNK SAVE ERROR] ${error}`);
                 if (error.message === "Too many concurrent uploads") {
@@ -159,11 +169,7 @@ export class FileController {
 
             const fileInfo: FileInfo = await this.fileService.completeUpload(sessionId);
 
-            res.status(HttpStatus.OK).json({
-                success: true,
-                message: "File upload completed successfully",
-                file: fileInfo,
-            });
+            sendOK(res, "업로드 완료", fileInfo);
         } catch (error) {
             this.logger.error(`[COMPLETE ERROR] ${error}`);
             if (error.message === "Upload session not found") {
@@ -187,10 +193,7 @@ export class FileController {
 
             this.fileService.cancelUpload(sessionId);
 
-            res.status(HttpStatus.OK).json({
-                success: true,
-                message: "Upload cancelled successfully",
-            });
+            sendOK(res, "업로드가 성공적으로 취소되었습니다.");
         } catch (error) {
             this.logger.error(`[CANCEL ERROR] ${error}`);
             if (error.message === "Upload session not found") {

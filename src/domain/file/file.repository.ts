@@ -27,63 +27,11 @@ export class FileRepository {
     }
 
     /**
-     * 모든 활성 파일을 조회합니다.
-     */
-    async findAllActive(options?: FindManyOptions<FileEntity>): Promise<FileEntity[]> {
-        return await this.fileRepository.find({
-            ...options,
-            where: {
-                ...options?.where,
-                isActive: true,
-            },
-        });
-    }
-
-    /**
-     * 파일명으로 파일을 조회합니다.
-     */
-    async findByFileName(fileName: string): Promise<FileEntity | null> {
-        return await this.fileRepository.findOne({
-            where: { fileName, isActive: true },
-        });
-    }
-
-    /**
      * 해시값으로 파일을 조회합니다 (중복 파일 확인용).
      */
     async findByHash(hash: string): Promise<FileEntity | null> {
         return await this.fileRepository.findOne({
             where: { hash, isActive: true },
-        });
-    }
-
-    /**
-     * 카테고리별로 파일을 조회합니다.
-     */
-    async findByCategory(category: string): Promise<FileEntity[]> {
-        return await this.fileRepository.find({
-            where: { category, isActive: true },
-            order: { createdAt: "DESC" },
-        });
-    }
-
-    /**
-     * 업로더별로 파일을 조회합니다.
-     */
-    async findByUploader(uploadedBy: string): Promise<FileEntity[]> {
-        return await this.fileRepository.find({
-            where: { uploadedBy, isActive: true },
-            order: { createdAt: "DESC" },
-        });
-    }
-
-    /**
-     * MIME 타입별로 파일을 조회합니다.
-     */
-    async findByMimeType(mimeType: string): Promise<FileEntity[]> {
-        return await this.fileRepository.find({
-            where: { mimeType, isActive: true },
-            order: { createdAt: "DESC" },
         });
     }
 
@@ -112,19 +60,6 @@ export class FileRepository {
     }
 
     /**
-     * 전체 파일 개수를 조회합니다.
-     */
-    async count(options?: FindManyOptions<FileEntity>): Promise<number> {
-        return await this.fileRepository.count({
-            ...options,
-            where: {
-                ...options?.where,
-                isActive: true,
-            },
-        });
-    }
-
-    /**
      * 페이지네이션으로 파일을 조회합니다.
      */
     async findWithPagination(
@@ -150,30 +85,5 @@ export class FileRepository {
             total,
             totalPages: Math.ceil(total / limit),
         };
-    }
-
-    /**
-     * 파일명으로 검색합니다.
-     */
-    async searchByName(searchTerm: string): Promise<FileEntity[]> {
-        return await this.fileRepository
-            .createQueryBuilder("file")
-            .where("file.originalName LIKE :searchTerm", { searchTerm: `%${searchTerm}%` })
-            .andWhere("file.isActive = :isActive", { isActive: true })
-            .orderBy("file.createdAt", "DESC")
-            .getMany();
-    }
-
-    /**
-     * 크기 범위로 파일을 조회합니다.
-     */
-    async findBySizeRange(minSize: number, maxSize: number): Promise<FileEntity[]> {
-        return await this.fileRepository
-            .createQueryBuilder("file")
-            .where("file.size >= :minSize", { minSize })
-            .andWhere("file.size <= :maxSize", { maxSize })
-            .andWhere("file.isActive = :isActive", { isActive: true })
-            .orderBy("file.size", "ASC")
-            .getMany();
     }
 }

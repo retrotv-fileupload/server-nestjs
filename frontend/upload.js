@@ -111,12 +111,12 @@ function startStatusMonitoring() {
             const data = await response.json();
 
             if (response.ok) {
-                updateProgress(data.progress, data.uploadedChunks, data.totalChunks);
+                updateProgress(data.data.progress, data.data.uploadedChunks, data.data.totalChunks);
                 if (!isPaused) {
-                    document.getElementById("statusText").textContent = data.status;
+                    document.getElementById("statusText").textContent = data.data.status;
                 }
 
-                if (data.progress === 100 && data.status === "all_chunks_uploaded") {
+                if (data.data.progress === 100 && data.data.status === "all_chunks_uploaded") {
                     log("모든 청크 업로드 완료! 파일 병합을 시작합니다.", "success");
                 }
             }
@@ -177,12 +177,11 @@ async function startUpload() {
         });
 
         const initData = await initResponse.json();
-
         if (!initResponse.ok) {
             throw new Error(initData.error || "초기화 실패");
         }
 
-        sessionId = initData.sessionId;
+        sessionId = initData.data.sessionId;
         log(`세션 생성 완료: ${sessionId}`);
 
         // 2. 상태 모니터링 시작
@@ -240,14 +239,15 @@ async function getUploadedChunks() {
         const statusResponse = await fetch(`${API_BASE}/api/files/upload/status?sessionId=${sessionId}`);
         if (statusResponse.ok) {
             const statusData = await statusResponse.json();
+            console.log("statusData response:", statusData);
 
-            log(`상태 조회: ${statusData.uploadedChunks}/${statusData.totalChunks} 청크 업로드됨`);
-            log(`누락된 청크 개수: ${statusData.missingChunks ? statusData.missingChunks.length : 0}`);
+            log(`상태 조회: ${statusData.data.uploadedChunks}/${statusData.data.totalChunks} 청크 업로드됨`);
+            log(`누락된 청크 개수: ${statusData.data.missingChunks ? statusData.data.missingChunks.length : 0}`);
 
             // 서버에서 업로드된 청크 수를 직접 사용
-            if (statusData.missingChunks && Array.isArray(statusData.missingChunks)) {
+            if (statusData.data.missingChunks && Array.isArray(statusData.data.missingChunks)) {
                 // 누락된 청크 목록으로부터 업로드된 청크 계산
-                const missingChunks = new Set(statusData.missingChunks);
+                const missingChunks = new Set(statusData.data.missingChunks);
                 for (let i = 0; i < totalChunks; i++) {
                     if (!missingChunks.has(i)) {
                         uploadedChunks.add(i);
@@ -276,16 +276,16 @@ async function verifyUploadComplete() {
         const finalStatusResponse = await fetch(`${API_BASE}/api/files/upload/status?sessionId=${sessionId}`);
         if (finalStatusResponse.ok) {
             const finalStatusData = await finalStatusResponse.json();
-            log(`최종 상태: ${finalStatusData.uploadedChunks}/${finalStatusData.totalChunks} 청크 업로드됨`);
+            log(`최종 상태: ${finalStatusData.data.uploadedChunks}/${finalStatusData.data.totalChunks} 청크 업로드됨`);
 
-            if (finalStatusData.missingChunks && finalStatusData.missingChunks.length > 0) {
-                const missingList = finalStatusData.missingChunks.slice(0, 5).join(", ");
-                const moreText = finalStatusData.missingChunks.length > 5 ? "..." : "";
+            if (finalStatusData.data.missingChunks && finalStatusData.data.missingChunks.length > 0) {
+                const missingList = finalStatusData.data.missingChunks.slice(0, 5).join(", ");
+                const moreText = finalStatusData.data.missingChunks.length > 5 ? "..." : "";
                 log(
-                    `경고: ${finalStatusData.missingChunks.length}개의 청크가 누락됨: [${missingList}${moreText}]`,
+                    `경고: ${finalStatusData.data.missingChunks.length}개의 청크가 누락됨: [${missingList}${moreText}]`,
                     "error",
                 );
-                throw new Error(`Missing ${finalStatusData.missingChunks.length} chunks`);
+                throw new Error(`Missing ${finalStatusData.data.missingChunks.length} chunks`);
             }
         }
     } catch (error) {
@@ -306,13 +306,12 @@ async function completeUpload() {
     });
 
     const completeData = await completeResponse.json();
-
     if (!completeResponse.ok) {
         throw new Error(completeData.error || `HTTP ${completeResponse.status}: 완료 처리 실패`);
     }
 
-    updateStatus(`업로드 완료! 파일 ID: ${completeData.file.id}`, "success");
-    log(`✅ 업로드 성공: ${completeData.file.downloadUrl}`, "success");
+    updateStatus(`업로드 완료! 파일 ID: ${completeData.data.id}`, "success");
+    log(`✅ 업로드 성공: ${completeData.data.downloadUrl}`, "success");
 }
 
 // 실제 청크 업로드 수행 함수
@@ -396,18 +395,17 @@ async function uploadSingleChunk(chunkIndex) {
             });
 
             const result = await response.json();
-
             if (!response.ok) {
                 throw new Error(result.error || `HTTP ${response.status}: 청크 업로드 실패`);
             }
 
-            log(`청크 ${chunkIndex + 1}/${totalChunks} 업로드 완료 (${result.progress}%)`);
+            log(`청크 ${chunkIndex + 1}/${totalChunks} 업로드 완료 (${result.data.progress}%)`);
 
             // 즉시 진행률 업데이트
-            updateProgress(result.progress, result.uploadedChunks, result.totalChunks);
+            updateProgress(result.data.progress, result.data.uploadedChunks, result.data.totalChunks);
 
             // 모든 청크가 완료되었는지 확인
-            if (result.isComplete) {
+            if (result.data.isComplete) {
                 log("🎉 모든 청크 업로드 완료!", "success");
                 updateStatus("모든 청크 업로드 완료! 파일 병합 준비 중...", "success");
             }
