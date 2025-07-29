@@ -254,7 +254,7 @@ export class FileService {
 
             // 데이터베이스에 저장
             const fileEntity = await this.fileRepository.create({
-                originalName: session.fileName,
+                originalFileName: session.fileName,
                 fileName: finalFileName,
                 filePath: finalFilePath,
                 mimeType: session.mimeType,
@@ -329,7 +329,9 @@ export class FileService {
     /**
      * 파일 다운로드를 위한 파일 조회
      */
-    async getFileForDownload(id: string): Promise<{ filePath: string; originalName: string; mimeType: string } | null> {
+    async getFileForDownload(
+        id: string,
+    ): Promise<{ filePath: string; savedFileName: string; originalFileName: string; mimeType: string } | null> {
         const file = await this.fileRepository.findById(id);
         if (!file?.isActive) {
             return null;
@@ -342,7 +344,8 @@ export class FileService {
 
         return {
             filePath: file.filePath,
-            originalName: file.originalName,
+            savedFileName: file.fileName,
+            originalFileName: file.originalFileName,
             mimeType: file.mimeType,
         };
     }

@@ -7,7 +7,7 @@ export class FileEntity {
     id: string;
 
     @Column({ length: 500 })
-    originalName: string;
+    originalFileName: string;
 
     @Column({ length: 500 })
     fileName: string;

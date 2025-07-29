@@ -6,6 +6,7 @@ import { Controller, Delete, Get, Post, Req, Res, Body, HttpStatus, Logger, Para
 import { FileService } from "src/domain/file/file.service";
 import { FileInfo, InitUploadDto, UploadStatusResponse } from "src/common/types/file";
 import { sendBadRequest, sendInternalServerError, sendNotFound, sendTooManyRequests } from "src/common/utils/response";
+import { FileUtils } from "src/common/utils/file";
 
 @Controller("/api/files")
 export class FileController {
@@ -19,25 +20,37 @@ export class FileController {
     constructor(private readonly fileService: FileService) {}
 
     @Get("/download/:id")
-    async downloadFile(@Param("id") id: string, @Res() res: Response): Promise<void> {
+    async downloadFile(@Param("id") id: string, @Req() req: Request, @Res() res: Response): Promise<void> {
         try {
+            const userAgent = req.headers["user-agent"];
             const fileInfo = await this.fileService.getFileForDownload(id);
+
+            this.logger.debug(`[DOWNLOAD] User-Agent: ${userAgent}`);
+
             if (!fileInfo) {
+                this.logger.debug(`[DOWNLOAD] ${id} 파일이 없습니다.`);
                 return sendNotFound(res, "파일을 찾을 수 없습니다.");
             }
 
-            const stat = fs.statSync(fileInfo.filePath);
+            const stat = await fs.promises.stat(fileInfo.filePath);
+            const contentType = fileInfo.mimeType || "application/octet-stream";
+            const contentLength = stat.size;
+            const contentDisposition = FileUtils.getSafeFilename(fileInfo.originalFileName, userAgent);
+
+            this.logger.debug(`[DOWNLOAD] Content-Type: ${contentType}`);
+            this.logger.debug(`[DOWNLOAD] Content-Length: ${contentLength}`);
+            this.logger.debug(`[DOWNLOAD] Content-Disposition: ${contentDisposition}`);
+            this.logger.debug(`[DOWNLOAD] Saved filename: ${fileInfo.savedFileName}`);
+            this.logger.debug(`[DOWNLOAD] Original filename: ${fileInfo.originalFileName}`);
 
             res.set({
-                "Content-Type": fileInfo.mimeType || "application/octet-stream",
-                "Content-Length": stat.size.toString(),
-                "Content-Disposition": `attachment; filename="${fileInfo.originalName}"`,
+                "Content-Type": contentType,
+                "Content-Length": contentLength.toString(),
+                "Content-Disposition": contentDisposition,
             });
 
             const fileStream = fs.createReadStream(fileInfo.filePath);
             fileStream.pipe(res);
-
-            this.logger.log(`[DOWNLOAD] File: ${fileInfo.originalName}`);
         } catch (error) {
             this.logger.error(`[DOWNLOAD ERROR] ${error}`);
             sendInternalServerError(res, "다운로드에 실패 했습니다.");
