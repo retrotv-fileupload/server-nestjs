@@ -4,7 +4,7 @@ import fs from "fs";
 import path from "path";
 import { IncomingForm } from "formidable";
 
-import { FileUtils } from "src/common/utils/file";
+import { mkdir, getHash } from "src/common/utils/file";
 import { FileRepository } from "src/domain/file/file.repository";
 import { generateSessionId, generateUuidV7 } from "src/common/utils/generator";
 import { UploadSession, ChunkUploadResponse, FileInfo, UploadStatusResponse } from "src/common/types/file";
@@ -26,7 +26,7 @@ export class FileService {
 
     constructor(private readonly fileRepository: FileRepository) {
         // 디렉토리 생성
-        FileUtils.mkdir(this.UPLOAD_DIR, this.TEMP_DIR);
+        mkdir(this.UPLOAD_DIR, this.TEMP_DIR);
 
         // 세션 정리 스케줄러 시작
         this.startSessionCleanup();
@@ -171,7 +171,7 @@ export class FileService {
             await this.mergeChunks(session, finalFilePath);
 
             // 파일 해시 계산
-            const hash = FileUtils.getHash(finalFilePath);
+            const hash = getHash(finalFilePath);
 
             // 데이터베이스에 저장
             const fileEntity = await this.fileRepository.create({

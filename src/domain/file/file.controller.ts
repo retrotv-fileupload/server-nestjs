@@ -11,7 +11,7 @@ import {
     sendOK,
     sendTooManyRequests,
 } from "src/common/utils/response";
-import { FileUtils } from "src/common/utils/file";
+import { getSafeFilename } from "src/common/utils/file";
 
 @Controller("/api/files")
 export class FileController {
@@ -34,7 +34,7 @@ export class FileController {
             const stat = await fs.promises.stat(fileInfo.filePath);
             const contentType = fileInfo.mimeType || "application/octet-stream";
             const contentLength = stat.size;
-            const contentDisposition = FileUtils.getSafeFilename(fileInfo.originalFileName, userAgent);
+            const contentDisposition = getSafeFilename(fileInfo.originalFileName, userAgent);
 
             this.logger.debug(`[DOWNLOAD] Content-Type: ${contentType}`);
             this.logger.debug(`[DOWNLOAD] Content-Length: ${contentLength}`);
