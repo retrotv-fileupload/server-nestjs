@@ -6,8 +6,9 @@ import { IncomingForm } from "formidable";
 
 import { mkdir, getHash } from "src/common/utils/file";
 import { FileRepository } from "src/domain/file/file.repository";
-import { generateSessionId, generateUuidV7 } from "src/common/utils/generator";
+import { generateChunkName, generateSessionId, generateUuidV7 } from "src/common/utils/generator";
 import { UploadSession, ChunkUploadResponse, FileInfo, UploadStatusResponse } from "src/common/types/file";
+import { merge } from "src/common/utils/chunk";
 
 @Injectable()
 export class FileService {
@@ -101,7 +102,7 @@ export class FileService {
             }
 
             // 청크 파일 저장
-            const chunkPath = path.join(session.tempDir, `chunk_${chunkIndex.toString().padStart(6, "0")}`);
+            const chunkPath = path.join(session.tempDir, generateChunkName(chunkIndex));
             await fs.promises.writeFile(chunkPath, chunkBuffer);
 
             // 청크 등록
@@ -168,7 +169,7 @@ export class FileService {
         const finalFilePath = path.join(this.UPLOAD_DIR, finalFileName);
 
         try {
-            await this.mergeChunks(session, finalFilePath);
+            await merge(session, finalFilePath);
 
             // 파일 해시 계산
             const hash = getHash(finalFilePath);
@@ -349,49 +350,6 @@ export class FileService {
             },
             5 * 60 * 1000,
         ); // 5분마다 정리
-    }
-
-    /**
-     * 청크 병합 (스트림 방식으로 메모리 효율적으로)
-     */
-    private async mergeChunks(session: UploadSession, outputPath: string): Promise<void> {
-        return new Promise((resolve, reject) => {
-            const writeStream = fs.createWriteStream(outputPath);
-            let currentChunk = 0;
-
-            const writeNextChunk = (): void => {
-                if (currentChunk >= session.totalChunks) {
-                    writeStream.end();
-                    resolve();
-                    return;
-                }
-
-                const chunkPath = path.join(session.tempDir, `chunk_${currentChunk.toString().padStart(6, "0")}`);
-
-                if (!fs.existsSync(chunkPath)) {
-                    writeStream.destroy();
-                    reject(new Error(`Missing chunk file: ${currentChunk}`));
-                    return;
-                }
-
-                const readStream = fs.createReadStream(chunkPath);
-
-                readStream.on("end", () => {
-                    currentChunk++;
-                    setImmediate(writeNextChunk); // 비동기적으로 다음 청크 처리
-                });
-
-                readStream.on("error", error => {
-                    writeStream.destroy();
-                    reject(error);
-                });
-
-                readStream.pipe(writeStream, { end: false });
-            };
-
-            writeStream.on("error", reject);
-            writeNextChunk();
-        });
     }
 
     /**

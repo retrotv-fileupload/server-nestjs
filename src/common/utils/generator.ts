@@ -8,3 +8,7 @@ export const generateSessionId = (): string => {
 export const generateUuidV7 = (): string => {
     return uuidv7();
 };
+
+export const generateChunkName = (currentChunk: number): string => {
+    return `chunk_${currentChunk.toString().padStart(6, "0")}`;
+};
