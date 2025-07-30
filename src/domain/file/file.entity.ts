@@ -1,5 +1,5 @@
-import { v7 as uuidv7 } from "uuid";
 import { Entity, PrimaryColumn, Column, CreateDateColumn, UpdateDateColumn, BeforeInsert } from "typeorm";
+import { generateUuidV7 } from "src/common/utils/generator";
 
 @Entity("files")
 export class FileEntity {
@@ -48,7 +48,7 @@ export class FileEntity {
     @BeforeInsert()
     generateId() {
         if (!this.id) {
-            this.id = uuidv7();
+            this.id = generateUuidV7();
         }
     }
 }

@@ -21,15 +21,6 @@ export class FileUtils {
         return `attachment; filename*=UTF-8''${encodedFilename}; filename="${fallbackName}"`;
     }
 
-    private static getIECompatibleName(originalName: string): string {
-        // IE는 URL 인코딩된 파일명을 filename에서도 부분적으로 지원
-        try {
-            return encodeURIComponent(originalName).substring(0, 100); // 길이 제한
-        } catch {
-            return originalName.replace(/[^\u0020-\u007E]/g, "_");
-        }
-    }
-
     public static getHash(filePath: string): string {
         const file = new File(filePath);
 
@@ -48,5 +39,14 @@ export class FileUtils {
 
             fs.mkdirSync(dir, { recursive: true });
         });
+    }
+
+    private static getIECompatibleName(originalName: string): string {
+        // IE는 URL 인코딩된 파일명을 filename에서도 부분적으로 지원
+        try {
+            return encodeURIComponent(originalName).substring(0, 100); // 길이 제한
+        } catch {
+            return originalName.replace(/[^\u0020-\u007E]/g, "_");
+        }
     }
 }

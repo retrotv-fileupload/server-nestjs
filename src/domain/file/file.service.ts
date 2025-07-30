@@ -2,11 +2,11 @@ import { Injectable, Logger } from "@nestjs/common";
 
 import fs from "fs";
 import path from "path";
-import crypto from "crypto";
 import { IncomingForm } from "formidable";
 
 import { FileUtils } from "src/common/utils/file";
 import { FileRepository } from "src/domain/file/file.repository";
+import { generateSessionId, generateUuidV7 } from "src/common/utils/generator";
 import { UploadSession, ChunkUploadResponse, FileInfo, UploadStatusResponse } from "src/common/types/file";
 
 @Injectable()
@@ -41,7 +41,7 @@ export class FileService {
         totalChunks: number,
         mimeType?: string,
     ): Promise<string> {
-        const sessionId = this.generateSessionId();
+        const sessionId = generateSessionId();
         const tempDir = path.join(this.TEMP_DIR, sessionId);
         await fs.promises.mkdir(tempDir, { recursive: true });
 
@@ -164,7 +164,7 @@ export class FileService {
         this.logger.debug(`UPLOAD DIR: ${this.UPLOAD_DIR}`);
 
         session.status = "merging";
-        const finalFileName = `${Date.now()}_${this.generateUniqueId()}_${session.fileName}`;
+        const finalFileName = generateUuidV7();
         const finalFilePath = path.join(this.UPLOAD_DIR, finalFileName);
 
         try {
@@ -320,14 +320,6 @@ export class FileService {
                 this.cleanupSession(sessionId);
             }
         }
-    }
-
-    private generateSessionId(): string {
-        return `${Date.now()}_${crypto.randomBytes(8).toString("hex")}`;
-    }
-
-    private generateUniqueId(): string {
-        return crypto.randomBytes(6).toString("hex");
     }
 
     private cleanupSession(sessionId: string): void {
