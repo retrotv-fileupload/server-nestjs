@@ -6,13 +6,13 @@ export class FileEntity {
     @PrimaryColumn("uuid")
     id: string;
 
-    @Column({ length: 500 })
+    @Column({ length: 512 })
     originalFileName: string;
 
-    @Column({ length: 500 })
+    @Column({ length: 512 })
     fileName: string;
 
-    @Column({ length: 1000 })
+    @Column({ length: 1024 })
     filePath: string;
 
     @Column()

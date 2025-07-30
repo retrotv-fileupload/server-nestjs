@@ -289,7 +289,7 @@ export class FileService {
 
         // 물리적 파일 삭제
         if (fs.existsSync(file.filePath)) {
-            fs.unlinkSync(file.filePath);
+            await fs.promises.unlink(file.filePath);
         }
 
         // 데이터베이스에서 삭제
