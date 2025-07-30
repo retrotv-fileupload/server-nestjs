@@ -1,5 +1,5 @@
 // 초기화 요청 DTO
-export interface InitUploadDto {
+export interface InitData {
     fileName: string;
     fileSize: number;
     totalChunks: number;

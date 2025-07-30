@@ -3,7 +3,7 @@ import { Request, Response } from "express";
 import { Controller, Delete, Get, Post, Req, Res, Body, Logger, Param, Query } from "@nestjs/common";
 
 import { FileService } from "src/domain/file/file.service";
-import { FileInfo, InitUploadDto, UploadStatusResponse } from "src/common/types/file";
+import { FileInfo, InitData, UploadStatusResponse } from "src/common/types/file";
 import {
     sendBadRequest,
     sendInternalServerError,
@@ -78,7 +78,7 @@ export class FileController {
     }
 
     @Post("/upload/init")
-    async uploadInit(@Body() initData: InitUploadDto, @Res() res: Response): Promise<void> {
+    async uploadInit(@Body() initData: InitData, @Res() res: Response): Promise<void> {
         try {
             const { fileName, fileSize, totalChunks, mimeType } = initData;
 
