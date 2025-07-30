@@ -3,6 +3,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import { IncomingForm } from "formidable";
 
 import { FileUtils } from "src/common/utils/file";
 import { FileRepository } from "src/domain/file/file.repository";
@@ -29,43 +30,6 @@ export class FileService {
 
         // 세션 정리 스케줄러 시작
         this.startSessionCleanup();
-    }
-
-    private startSessionCleanup(): void {
-        // 세션 정리 (30분 후 자동 삭제)
-        setInterval(
-            () => {
-                const now = Date.now();
-                for (const [sessionId, session] of this.uploadSessions.entries()) {
-                    if (now - session.lastActivity > 30 * 60 * 1000) {
-                        // 30분
-                        this.cleanupSession(sessionId);
-                        this.logger.log(`[CLEANUP] Expired session removed: ${sessionId}`);
-                    }
-                }
-            },
-            5 * 60 * 1000,
-        ); // 5분마다 정리
-    }
-
-    private generateSessionId(): string {
-        return `${Date.now()}_${crypto.randomBytes(8).toString("hex")}`;
-    }
-
-    private generateUniqueId(): string {
-        return crypto.randomBytes(6).toString("hex");
-    }
-
-    private cleanupSession(sessionId: string): void {
-        const session = this.uploadSessions.get(sessionId);
-        if (session && fs.existsSync(session.tempDir)) {
-            try {
-                fs.rmSync(session.tempDir, { recursive: true, force: true });
-            } catch (error) {
-                this.logger.error(`Failed to cleanup session ${sessionId}: ${error}`);
-            }
-        }
-        this.uploadSessions.delete(sessionId);
     }
 
     /**
@@ -169,49 +133,6 @@ export class FileService {
         } finally {
             this.activeUploads--;
         }
-    }
-
-    /**
-     * 청크 병합 (스트림 방식으로 메모리 효율적으로)
-     */
-    private async mergeChunks(session: UploadSession, outputPath: string): Promise<void> {
-        return new Promise((resolve, reject) => {
-            const writeStream = fs.createWriteStream(outputPath);
-            let currentChunk = 0;
-
-            const writeNextChunk = (): void => {
-                if (currentChunk >= session.totalChunks) {
-                    writeStream.end();
-                    resolve();
-                    return;
-                }
-
-                const chunkPath = path.join(session.tempDir, `chunk_${currentChunk.toString().padStart(6, "0")}`);
-
-                if (!fs.existsSync(chunkPath)) {
-                    writeStream.destroy();
-                    reject(new Error(`Missing chunk file: ${currentChunk}`));
-                    return;
-                }
-
-                const readStream = fs.createReadStream(chunkPath);
-
-                readStream.on("end", () => {
-                    currentChunk++;
-                    setImmediate(writeNextChunk); // 비동기적으로 다음 청크 처리
-                });
-
-                readStream.on("error", error => {
-                    writeStream.destroy();
-                    reject(error);
-                });
-
-                readStream.pipe(writeStream, { end: false });
-            };
-
-            writeStream.on("error", reject);
-            writeNextChunk();
-        });
     }
 
     /**
@@ -375,6 +296,17 @@ export class FileService {
         return await this.fileRepository.softDelete(id);
     }
 
+    getIncomingForm(): InstanceType<typeof IncomingForm> {
+        return new IncomingForm({
+            maxFileSize: 8 * 1024 * 1024,
+            multiples: false,
+            maxFields: 5,
+            maxFieldsSize: 1024,
+            uploadDir: this.UPLOAD_DIR, // 업로드 폴더 제한
+            keepExtensions: false,
+        });
+    }
+
     /**
      * 만료된 세션 정리 (정기적으로 실행)
      */
@@ -388,6 +320,86 @@ export class FileService {
                 this.cleanupSession(sessionId);
             }
         }
+    }
+
+    private generateSessionId(): string {
+        return `${Date.now()}_${crypto.randomBytes(8).toString("hex")}`;
+    }
+
+    private generateUniqueId(): string {
+        return crypto.randomBytes(6).toString("hex");
+    }
+
+    private cleanupSession(sessionId: string): void {
+        const session = this.uploadSessions.get(sessionId);
+        if (session && fs.existsSync(session.tempDir)) {
+            try {
+                fs.rmSync(session.tempDir, { recursive: true, force: true });
+            } catch (error) {
+                this.logger.error(`Failed to cleanup session ${sessionId}: ${error}`);
+            }
+        }
+        this.uploadSessions.delete(sessionId);
+    }
+
+    private startSessionCleanup(): void {
+        // 세션 정리 (30분 후 자동 삭제)
+        setInterval(
+            () => {
+                const now = Date.now();
+                for (const [sessionId, session] of this.uploadSessions.entries()) {
+                    if (now - session.lastActivity > 30 * 60 * 1000) {
+                        // 30분
+                        this.cleanupSession(sessionId);
+                        this.logger.log(`[CLEANUP] Expired session removed: ${sessionId}`);
+                    }
+                }
+            },
+            5 * 60 * 1000,
+        ); // 5분마다 정리
+    }
+
+    /**
+     * 청크 병합 (스트림 방식으로 메모리 효율적으로)
+     */
+    private async mergeChunks(session: UploadSession, outputPath: string): Promise<void> {
+        return new Promise((resolve, reject) => {
+            const writeStream = fs.createWriteStream(outputPath);
+            let currentChunk = 0;
+
+            const writeNextChunk = (): void => {
+                if (currentChunk >= session.totalChunks) {
+                    writeStream.end();
+                    resolve();
+                    return;
+                }
+
+                const chunkPath = path.join(session.tempDir, `chunk_${currentChunk.toString().padStart(6, "0")}`);
+
+                if (!fs.existsSync(chunkPath)) {
+                    writeStream.destroy();
+                    reject(new Error(`Missing chunk file: ${currentChunk}`));
+                    return;
+                }
+
+                const readStream = fs.createReadStream(chunkPath);
+
+                readStream.on("end", () => {
+                    currentChunk++;
+                    setImmediate(writeNextChunk); // 비동기적으로 다음 청크 처리
+                });
+
+                readStream.on("error", error => {
+                    writeStream.destroy();
+                    reject(error);
+                });
+
+                readStream.pipe(writeStream, { end: false });
+            };
+
+            writeStream.on("error", reject);
+            writeNextChunk();
+        });
     }
 
     /**

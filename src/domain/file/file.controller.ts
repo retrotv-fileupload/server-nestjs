@@ -1,5 +1,4 @@
 import fs from "fs";
-import { IncomingForm } from "formidable";
 import { Request, Response } from "express";
 import { Controller, Delete, Get, Post, Req, Res, Body, Logger, Param, Query } from "@nestjs/common";
 
@@ -17,11 +16,6 @@ import { FileUtils } from "src/common/utils/file";
 @Controller("/api/files")
 export class FileController {
     private readonly logger = new Logger(FileController.name);
-    private readonly UPLOAD_DIR =
-        process.env.UPLOAD_DIR ||
-        (process.platform === "win32"
-            ? "C:\\GitRepo\\fileupload\\uploads"
-            : "/Users/yjj8353/Desktop/git/GitRepo/Gitlab/fileserver/uploads");
 
     constructor(private readonly fileService: FileService) {}
 
@@ -108,14 +102,7 @@ export class FileController {
 
     @Post("/upload/chunk")
     async uploadChunk(@Req() req: Request, @Res() res: Response): Promise<void> {
-        const form = new IncomingForm({
-            maxFileSize: 8 * 1024 * 1024,
-            multiples: false,
-            maxFields: 5,
-            maxFieldsSize: 1024,
-            uploadDir: this.UPLOAD_DIR, // 업로드 폴더 제한
-            keepExtensions: false,
-        });
+        const form = this.fileService.getIncomingForm();
 
         form.parse(req, async (err: any, fields: any, files: any) => {
             if (err) {
@@ -138,10 +125,10 @@ export class FileController {
                 }
 
                 // 파일 데이터 읽기
-                const chunkBuffer = fs.readFileSync(chunkFile.filepath);
+                const chunkBuffer = await fs.promises.readFile(chunkFile.filepath);
 
                 // 임시 파일 삭제
-                fs.unlinkSync(chunkFile.filepath);
+                await fs.promises.unlink(chunkFile.filepath);
 
                 const result = await this.fileService.processChunkUpload(sessionId, chunkIdx, chunkBuffer);
 
