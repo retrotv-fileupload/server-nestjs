@@ -82,10 +82,13 @@ export class FileController {
         try {
             const { fileName, fileSize, totalChunks, mimeType } = initData;
 
-            this.logger.debug(`[INIT] 파일명: ${fileName}`);
-            this.logger.debug(`[INIT] 파일 크기: ${fileSize}`);
-            this.logger.debug(`[INIT] 총 청크 수: ${totalChunks}`);
-            this.logger.debug(`[INIT] MIME 타입: ${mimeType}`);
+            this.logger.debug(`
+                [ 업로드 초기화 요청 ]
+                파일명: ${fileName}
+                파일 크기: ${fileSize}
+                총 청크 수: ${totalChunks}
+                MIME 타입: ${mimeType}
+            `);
 
             if (!fileName || !fileSize || !totalChunks) {
                 return sendBadRequest(res, "필수 필드가 누락되었습니다.");
