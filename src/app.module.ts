@@ -1,9 +1,10 @@
-import { Module } from "@nestjs/common";
+import { Module, NestModule, MiddlewareConsumer } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { AppController } from "src/app.controller";
 import { AppService } from "src/app.service";
 import { FileModule, FileEntity } from "src/domain/file";
+import { LoggingMiddleware } from "src/common/middleware/logging.middleware";
 
 @Module({
     imports: [
@@ -43,4 +44,8 @@ import { FileModule, FileEntity } from "src/domain/file";
     controllers: [AppController],
     providers: [AppService],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+    configure(consumer: MiddlewareConsumer) {
+        consumer.apply(LoggingMiddleware).forRoutes("*"); // 모든 라우트에 적용
+    }
+}
