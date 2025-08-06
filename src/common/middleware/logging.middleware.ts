@@ -17,7 +17,14 @@ export class LoggingMiddleware implements NestMiddleware {
             startTime: Date.now(),
         };
 
-        // Request 로깅
+        this.logRequest(req, logData);
+        this.logResponse(res, logData);
+
+        next();
+    }
+
+    // Request 로깅
+    private logRequest(req: Request, logData: LogData): void {
         this.logger.debug(`
             [ REQUEST ]
             Method: ${logData.method}
@@ -53,7 +60,10 @@ export class LoggingMiddleware implements NestMiddleware {
                 }
             });
         }
+    }
 
+    // Response 로깅
+    private logResponse(res: Response, logData: LogData): void {
         // Response 가로채기
         const originalSend = res.send;
         const originalJson = res.json;
@@ -63,16 +73,14 @@ export class LoggingMiddleware implements NestMiddleware {
             const endTime = Date.now();
             const duration = endTime - logData.startTime;
 
-            logger.debug(
-                `
+            logger.debug(`
                 [ RESPONSE ]
                 Method: ${logData.method}
                 URL: ${logData.url}
                 Status: ${res.statusCode}
                 Duration: ${duration}ms
                 Content-Length: ${Buffer.byteLength(body || "")}
-            `,
-            );
+            `);
 
             if (body && res.statusCode >= 400) {
                 logger.error(`
@@ -94,16 +102,14 @@ export class LoggingMiddleware implements NestMiddleware {
             const endTime = Date.now();
             const duration = endTime - logData.startTime;
 
-            logger.debug(
-                `
+            logger.debug(`
                 [ RESPONSE ]
                 Method: ${logData.method}
                 URL: ${logData.url}
                 Status: ${res.statusCode}
                 Duration: ${duration}ms
                 Content-Type: application/json
-            `,
-            );
+            `);
 
             if (obj && res.statusCode >= 400) {
                 logger.error(`
@@ -111,12 +117,10 @@ export class LoggingMiddleware implements NestMiddleware {
                     ${prettyJsonPrint(obj)}
                 `);
             } else if (obj) {
-                logger.debug(
-                    `
+                logger.debug(`
                     [ RESPONSE BODY ]
                     ${prettyJsonPrint(obj)}
-                `,
-                );
+                `);
             }
 
             return originalJson.call(this, obj);
@@ -128,22 +132,19 @@ export class LoggingMiddleware implements NestMiddleware {
             const endTime = Date.now();
             const duration = endTime - logData.startTime;
 
-            logger.debug(
-                `
+            logger.debug(`
                 [ RESPONSE ]
                 Method: ${logData.method}
                 URL: ${logData.url}
                 Status: ${res.statusCode}
                 Duration: ${duration}ms
                 Type: Stream/File
-            `,
-            );
+            `);
 
             return originalEndMethod(...args);
         };
 
         const logger = this.logger;
-        next();
     }
 
     // multipart/form-data에서 특정 필드만 파싱
