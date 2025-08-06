@@ -1,7 +1,7 @@
 import { Injectable, Logger, NestMiddleware } from "@nestjs/common";
 import { Request, Response, NextFunction } from "express";
-import { LogData } from "../types/log";
-import { prettyJsonPrint } from "../utils/string";
+import { LogData } from "src/common/types/log";
+import { prettyJsonPrint, removeIndentation } from "src/common/utils/string";
 
 @Injectable()
 export class LoggingMiddleware implements NestMiddleware {
@@ -25,15 +25,17 @@ export class LoggingMiddleware implements NestMiddleware {
 
     // Request 로깅
     private logRequest(req: Request, logData: LogData): void {
-        this.logger.debug(`
-            [ REQUEST ]
-            Method: ${logData.method}
-            URL: ${logData.url}
-            IP: ${logData.ip}
-            User-Agent: ${logData.userAgent}
-            Content-Type: ${logData.headers["content-type"]?.split(";")[0] || "N/A"}
-            Content-Length: ${logData.headers["content-length"] || "N/A"}
-        `);
+        this.logger.debug(
+            removeIndentation(`
+                [ REQUEST ]
+                Method: ${logData.method}
+                URL: ${logData.url}
+                IP: ${logData.ip}
+                User-Agent: ${logData.userAgent}
+                Content-Type: ${logData.headers["content-type"]?.split(";")[0] || "N/A"}
+                Content-Length: ${logData.headers["content-length"] || "N/A"}
+            `),
+        );
 
         // Request Body 로깅 (POST, PUT, PATCH인 경우), /api/files/upload/chunk 제외
         if (!["/api/files/upload/chunk"].includes(logData.url) && ["POST", "PUT", "PATCH"].includes(logData.method)) {
@@ -44,7 +46,12 @@ export class LoggingMiddleware implements NestMiddleware {
 
             req.on("end", () => {
                 if (body) {
-                    this.logger.debug(`[ REQUEST BODY ] ${prettyJsonPrint(body)}`);
+                    this.logger.debug(
+                        removeIndentation(`
+                            [ REQUEST BODY ]
+                            ${prettyJsonPrint(body)}
+                        `),
+                    );
                 }
             });
         } else if (["/api/files/upload/chunk"].includes(logData.url)) {
@@ -56,7 +63,12 @@ export class LoggingMiddleware implements NestMiddleware {
             req.on("end", () => {
                 if (body) {
                     const parsedData = this.parseMultipartFields(body, ["sessionId", "chunkIndex"]);
-                    this.logger.debug(`[ CHUNK REQUEST ] ${JSON.stringify(parsedData, null, 2)}`);
+                    this.logger.debug(
+                        removeIndentation(`
+                            [ CHUNK REQUEST ]
+                            ${JSON.stringify(parsedData, null, 2)}
+                        `),
+                    );
                 }
             });
         }
@@ -73,25 +85,31 @@ export class LoggingMiddleware implements NestMiddleware {
             const endTime = Date.now();
             const duration = endTime - logData.startTime;
 
-            logger.debug(`
-                [ RESPONSE ]
-                Method: ${logData.method}
-                URL: ${logData.url}
-                Status: ${res.statusCode}
-                Duration: ${duration}ms
-                Content-Length: ${Buffer.byteLength(body || "")}
-            `);
+            logger.debug(
+                removeIndentation(`
+                    [ RESPONSE ]
+                    Method: ${logData.method}
+                    URL: ${logData.url}
+                    Status: ${res.statusCode}
+                    Duration: ${duration}ms
+                    Content-Length: ${Buffer.byteLength(body || "")}
+                `),
+            );
 
             if (body && res.statusCode >= 400) {
-                logger.error(`
-                    [ ERROR RESPONSE ]
-                    ${prettyJsonPrint(body)}
-                `);
+                logger.error(
+                    removeIndentation(`
+                        [ ERROR RESPONSE ]
+                        ${prettyJsonPrint(body)}
+                    `),
+                );
             } else if (body) {
-                logger.debug(`
-                    [ RESPONSE BODY ]
-                    ${prettyJsonPrint(body)}
-                `);
+                logger.debug(
+                    removeIndentation(`
+                        [ RESPONSE BODY ]
+                        ${prettyJsonPrint(body)}
+                    `),
+                );
             }
 
             return originalSend.call(this, body);
@@ -102,25 +120,31 @@ export class LoggingMiddleware implements NestMiddleware {
             const endTime = Date.now();
             const duration = endTime - logData.startTime;
 
-            logger.debug(`
-                [ RESPONSE ]
-                Method: ${logData.method}
-                URL: ${logData.url}
-                Status: ${res.statusCode}
-                Duration: ${duration}ms
-                Content-Type: application/json
-            `);
+            logger.debug(
+                removeIndentation(`
+                    [ RESPONSE ]
+                    Method: ${logData.method}
+                    URL: ${logData.url}
+                    Status: ${res.statusCode}
+                    Duration: ${duration}ms
+                    Content-Type: application/json
+                `),
+            );
 
             if (obj && res.statusCode >= 400) {
-                logger.error(`
-                    [ ERROR RESPONSE ]
-                    ${prettyJsonPrint(obj)}
-                `);
+                logger.error(
+                    removeIndentation(`
+                        [ ERROR RESPONSE ]
+                        ${prettyJsonPrint(obj)}
+                    `),
+                );
             } else if (obj) {
-                logger.debug(`
-                    [ RESPONSE BODY ]
-                    ${prettyJsonPrint(obj)}
-                `);
+                logger.debug(
+                    removeIndentation(`
+                        [ RESPONSE BODY ]
+                        ${prettyJsonPrint(obj)}
+                    `),
+                );
             }
 
             return originalJson.call(this, obj);
@@ -132,14 +156,16 @@ export class LoggingMiddleware implements NestMiddleware {
             const endTime = Date.now();
             const duration = endTime - logData.startTime;
 
-            logger.debug(`
-                [ RESPONSE ]
-                Method: ${logData.method}
-                URL: ${logData.url}
-                Status: ${res.statusCode}
-                Duration: ${duration}ms
-                Type: Stream/File
-            `);
+            logger.debug(
+                removeIndentation(`
+                    [ RESPONSE ]
+                    Method: ${logData.method}
+                    URL: ${logData.url}
+                    Status: ${res.statusCode}
+                    Duration: ${duration}ms
+                    Type: Stream/File
+                `),
+            );
 
             return originalEndMethod(...args);
         };
