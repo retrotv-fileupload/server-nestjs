@@ -1,17 +1,6 @@
-import { Injectable, Logger, NestMiddleware } from '@nestjs/common';
-import { Request, Response, NextFunction } from 'express';
-
-interface LogData {
-    method: string;
-    url: string;
-    ip: string;
-    userAgent: string;
-    startTime: number;
-    endTime?: number;
-    statusCode?: number;
-    contentLength?: number;
-    duration?: number;
-}
+import { Injectable, Logger, NestMiddleware } from "@nestjs/common";
+import { Request, Response, NextFunction } from "express";
+import { LogData } from "src/common/types/log";
 
 @Injectable()
 export class AdvancedLoggingMiddleware implements NestMiddleware {
@@ -22,7 +11,7 @@ export class AdvancedLoggingMiddleware implements NestMiddleware {
             method: req.method,
             url: req.originalUrl,
             ip: req.ip,
-            userAgent: req.get('user-agent') || '',
+            userAgent: req.get("user-agent") || "",
             startTime: Date.now(),
         };
 
@@ -37,10 +26,10 @@ export class AdvancedLoggingMiddleware implements NestMiddleware {
 
     private logRequest(req: Request, logData: LogData): void {
         const { method, url, ip, userAgent } = logData;
-        
+
         this.logger.log(`🚀 [REQ] ${method} ${url} - IP: ${ip}`);
-        
-        if (Logger.isLevelEnabled('debug')) {
+
+        if (Logger.isLevelEnabled("debug")) {
             this.logger.debug(`
                 📥 [REQUEST DETAILS]
                 Method: ${method}
@@ -52,7 +41,7 @@ export class AdvancedLoggingMiddleware implements NestMiddleware {
         }
 
         // Body가 있는 요청의 경우 로깅
-        if (['POST', 'PUT', 'PATCH'].includes(method) && req.body) {
+        if (["POST", "PUT", "PATCH"].includes(method) && req.body) {
             this.logger.debug(`📦 [REQUEST BODY] ${JSON.stringify(req.body, null, 2)}`);
         }
     }
@@ -74,7 +63,7 @@ export class AdvancedLoggingMiddleware implements NestMiddleware {
         };
 
         // 스트림 응답 처리
-        res.on('finish', () => {
+        res.on("finish", () => {
             if (!logData.endTime) {
                 this.logResponse(logData, res.statusCode, null, true);
             }
@@ -88,27 +77,27 @@ export class AdvancedLoggingMiddleware implements NestMiddleware {
 
         const { method, url, duration } = logData;
         const statusEmoji = this.getStatusEmoji(statusCode);
-        
+
         this.logger.log(`${statusEmoji} [RES] ${method} ${url} - ${statusCode} (${duration}ms)`);
 
-        if (Logger.isLevelEnabled('debug')) {
-            let bodyText = '';
+        if (Logger.isLevelEnabled("debug")) {
+            let bodyText = "";
             if (body && !isStream) {
-                bodyText = typeof body === 'string' ? body : JSON.stringify(body, null, 2);
+                bodyText = typeof body === "string" ? body : JSON.stringify(body, null, 2);
             }
-                
+
             this.logger.debug(`
                 📤 [RESPONSE DETAILS]
                 Status: ${statusCode}
                 Duration: ${duration}ms
-                Type: ${isStream ? 'Stream/File' : 'JSON/Text'}
-                ${bodyText ? `Body: ${bodyText}` : ''}
+                Type: ${isStream ? "Stream/File" : "JSON/Text"}
+                ${bodyText ? `Body: ${bodyText}` : ""}
             `);
         }
 
         // 에러 응답 특별 로깅
         if (statusCode >= 400) {
-            this.logger.error(`❌ [ERROR] ${method} ${url} - ${statusCode} ${body ? JSON.stringify(body) : ''}`);
+            this.logger.error(`❌ [ERROR] ${method} ${url} - ${statusCode} ${body ? JSON.stringify(body) : ""}`);
         }
 
         // 느린 응답 경고
@@ -118,10 +107,10 @@ export class AdvancedLoggingMiddleware implements NestMiddleware {
     }
 
     private getStatusEmoji(statusCode: number): string {
-        if (statusCode >= 200 && statusCode < 300) return '✅';
-        if (statusCode >= 300 && statusCode < 400) return '🔄';
-        if (statusCode >= 400 && statusCode < 500) return '⚠️';
-        if (statusCode >= 500) return '❌';
-        return '📡';
+        if (statusCode >= 200 && statusCode < 300) return "✅";
+        if (statusCode >= 300 && statusCode < 400) return "🔄";
+        if (statusCode >= 400 && statusCode < 500) return "⚠️";
+        if (statusCode >= 500) return "❌";
+        return "📡";
     }
 }

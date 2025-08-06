@@ -1,26 +1,35 @@
 import { Injectable, Logger, NestMiddleware } from "@nestjs/common";
 import { Request, Response, NextFunction } from "express";
+import { LogData } from "../types/log";
+import { prettyJsonPrint } from "../utils/string";
 
 @Injectable()
 export class LoggingMiddleware implements NestMiddleware {
     private readonly logger = new Logger(LoggingMiddleware.name);
 
     use(req: Request, res: Response, next: NextFunction): void {
-        const { method, originalUrl, ip, headers } = req;
-        const userAgent = req.get("user-agent") || "";
-        const startTime = Date.now();
+        const logData: LogData = {
+            method: req.method,
+            url: req.originalUrl,
+            ip: req.ip,
+            headers: req.headers,
+            userAgent: req.get("user-agent") || "",
+            startTime: Date.now(),
+        };
 
         // Request 로깅
         this.logger.debug(`
-            [REQUEST] ${method} ${originalUrl}
-            IP: ${ip}
-            User-Agent: ${userAgent}
-            Content-Type: ${headers["content-type"] || "N/A"}
-            Content-Length: ${headers["content-length"] || "N/A"}
+            [ REQUEST ]
+            Method: ${logData.method}
+            URL: ${logData.url}
+            IP: ${logData.ip}
+            User-Agent: ${logData.userAgent}
+            Content-Type: ${logData.headers["content-type"]?.split(";")[0] || "N/A"}
+            Content-Length: ${logData.headers["content-length"] || "N/A"}
         `);
 
-        // Request Body 로깅 (POST, PUT, PATCH인 경우)
-        if (["POST", "PUT", "PATCH"].includes(method)) {
+        // Request Body 로깅 (POST, PUT, PATCH인 경우), /api/files/upload/chunk 제외
+        if (!["/api/files/upload/chunk"].includes(logData.url) && ["POST", "PUT", "PATCH"].includes(logData.method)) {
             let body = "";
             req.on("data", chunk => {
                 body += chunk.toString();
@@ -28,12 +37,19 @@ export class LoggingMiddleware implements NestMiddleware {
 
             req.on("end", () => {
                 if (body) {
-                    try {
-                        const parsedBody = JSON.parse(body);
-                        this.logger.debug(`[REQUEST BODY] ${JSON.stringify(parsedBody, null, 2)}`);
-                    } catch {
-                        this.logger.debug(`[REQUEST BODY] ${body}`);
-                    }
+                    this.logger.debug(`[ REQUEST BODY ] ${prettyJsonPrint(body)}`);
+                }
+            });
+        } else if (["/api/files/upload/chunk"].includes(logData.url)) {
+            let body = "";
+            req.on("data", chunk => {
+                body += chunk.toString();
+            });
+
+            req.on("end", () => {
+                if (body) {
+                    const parsedData = this.parseMultipartFields(body, ["sessionId", "chunkIndex"]);
+                    this.logger.debug(`[ CHUNK REQUEST ] ${JSON.stringify(parsedData, null, 2)}`);
                 }
             });
         }
@@ -45,19 +61,29 @@ export class LoggingMiddleware implements NestMiddleware {
         // res.send() 가로채기
         res.send = function (body: any) {
             const endTime = Date.now();
-            const duration = endTime - startTime;
+            const duration = endTime - logData.startTime;
 
-            logger.debug(`
-                [RESPONSE] ${method} ${originalUrl}
+            logger.debug(
+                `
+                [ RESPONSE ]
+                Method: ${logData.method}
+                URL: ${logData.url}
                 Status: ${res.statusCode}
                 Duration: ${duration}ms
                 Content-Length: ${Buffer.byteLength(body || "")}
-            `);
+            `,
+            );
 
             if (body && res.statusCode >= 400) {
-                logger.error(`[ERROR RESPONSE] ${body}`);
+                logger.error(`
+                    [ ERROR RESPONSE ]
+                    ${prettyJsonPrint(body)}
+                `);
             } else if (body) {
-                logger.debug(`[RESPONSE BODY] ${body}`);
+                logger.debug(`
+                    [ RESPONSE BODY ]
+                    ${prettyJsonPrint(body)}
+                `);
             }
 
             return originalSend.call(this, body);
@@ -66,19 +92,31 @@ export class LoggingMiddleware implements NestMiddleware {
         // res.json() 가로채기
         res.json = function (obj: any) {
             const endTime = Date.now();
-            const duration = endTime - startTime;
+            const duration = endTime - logData.startTime;
 
-            logger.debug(`
-                [RESPONSE] ${method} ${originalUrl}
+            logger.debug(
+                `
+                [ RESPONSE ]
+                Method: ${logData.method}
+                URL: ${logData.url}
                 Status: ${res.statusCode}
                 Duration: ${duration}ms
                 Content-Type: application/json
-            `);
+            `,
+            );
 
             if (obj && res.statusCode >= 400) {
-                logger.error(`[ERROR RESPONSE] ${JSON.stringify(obj, null, 2)}`);
+                logger.error(`
+                    [ ERROR RESPONSE ]
+                    ${prettyJsonPrint(obj)}
+                `);
             } else if (obj) {
-                logger.debug(`[RESPONSE BODY] ${JSON.stringify(obj, null, 2)}`);
+                logger.debug(
+                    `
+                    [ RESPONSE BODY ]
+                    ${prettyJsonPrint(obj)}
+                `,
+                );
             }
 
             return originalJson.call(this, obj);
@@ -88,19 +126,43 @@ export class LoggingMiddleware implements NestMiddleware {
         const originalEndMethod = res.end.bind(res);
         res.end = function (...args: any[]) {
             const endTime = Date.now();
-            const duration = endTime - startTime;
+            const duration = endTime - logData.startTime;
 
-            logger.debug(`
-                [RESPONSE] ${method} ${originalUrl}
+            logger.debug(
+                `
+                [ RESPONSE ]
+                Method: ${logData.method}
+                URL: ${logData.url}
                 Status: ${res.statusCode}
                 Duration: ${duration}ms
                 Type: Stream/File
-            `);
+            `,
+            );
 
             return originalEndMethod(...args);
         };
 
         const logger = this.logger;
         next();
+    }
+
+    // multipart/form-data에서 특정 필드만 파싱
+    private parseMultipartFields(body: string, fieldNames: string[]): Record<string, string> {
+        const result: Record<string, string> = {};
+
+        for (const fieldName of fieldNames) {
+            // Content-Disposition: form-data; name="fieldName" 패턴 찾기
+            const fieldRegex = new RegExp(
+                `Content-Disposition: form-data; name="${fieldName}"[\\s\\S]*?\\r\\n\\r\\n([\\s\\S]*?)\\r\\n------`,
+                "i",
+            );
+
+            const match = fieldRegex.exec(body);
+            if (match?.[1]) {
+                result[fieldName] = match[1].trim();
+            }
+        }
+
+        return result;
     }
 }
