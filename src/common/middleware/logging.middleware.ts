@@ -37,12 +37,9 @@ export class LoggingMiddleware implements NestMiddleware {
             `),
         );
 
-        // Request Body 로깅 (POST, PUT, PATCH인 경우), /api/files/upload/chunk, /api/files/upload/init 제외
+        // Request Body 로깅 (POST, PUT, PATCH인 경우), /api/files/upload/chunk 제외
         console.log(logData.url);
-        if (
-            !["/api/files/upload/chunk", "/api/files/upload/init"].includes(logData.url) &&
-            ["POST", "PUT", "PATCH"].includes(logData.method)
-        ) {
+        if (!["/api/files/upload/chunk"].includes(logData.url) && ["POST", "PUT", "PATCH"].includes(logData.method)) {
             let body = "";
             req.on("data", chunk => {
                 body += chunk.toString();
@@ -77,19 +74,6 @@ export class LoggingMiddleware implements NestMiddleware {
                     );
                 }
             });
-        }
-
-        if (logData.url === "/api/files/upload/init") {
-            const { fileName, fileSize, totalChunks, mimeType } = req.body;
-            this.logger.debug(
-                removeIndentation(`
-                    [ 업로드 초기화 요청 ]
-                    파일명: ${fileName}
-                    파일 크기: ${fileSize}
-                    총 청크 수: ${totalChunks}
-                    MIME 타입: ${mimeType}
-                `),
-            );
         }
     }
 
