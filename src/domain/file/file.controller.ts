@@ -81,15 +81,6 @@ export class FileController {
     async uploadInit(@Body() initData: InitData, @Res() res: Response): Promise<void> {
         try {
             const { fileName, fileSize, totalChunks, mimeType } = initData;
-
-            this.logger.debug(`
-                [ 업로드 초기화 요청 ]
-                파일명: ${fileName}
-                파일 크기: ${fileSize}
-                총 청크 수: ${totalChunks}
-                MIME 타입: ${mimeType}
-            `);
-
             if (!fileName || !fileSize || !totalChunks) {
                 return sendBadRequest(res, "필수 필드가 누락되었습니다.");
             }
