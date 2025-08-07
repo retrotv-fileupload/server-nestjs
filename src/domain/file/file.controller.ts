@@ -25,9 +25,6 @@ export class FileController {
         try {
             const userAgent = req.headers["user-agent"];
             const fileInfo = await this.fileService.getFileForDownload(id);
-
-            this.logger.debug(`[DOWNLOAD] User-Agent: ${userAgent}`);
-
             if (!fileInfo) {
                 return sendNotFound(res, "파일을 찾을 수 없습니다.");
             }
@@ -37,11 +34,16 @@ export class FileController {
             const contentLength = stat.size;
             const contentDisposition = getSafeFilename(fileInfo.originalFileName, userAgent);
 
-            this.logger.debug(`[DOWNLOAD] Content-Type: ${contentType}`);
-            this.logger.debug(`[DOWNLOAD] Content-Length: ${contentLength}`);
-            this.logger.debug(`[DOWNLOAD] Content-Disposition: ${contentDisposition}`);
-            this.logger.debug(`[DOWNLOAD] Saved file name: ${fileInfo.savedFileName}`);
-            this.logger.debug(`[DOWNLOAD] Original file name: ${fileInfo.originalFileName}`);
+            this.logger.debug(
+                removeIndentation(`
+                    [ 다운로드 요청 ]
+                    User-Agent: ${userAgent}
+                    Content-Type: ${contentType}
+                    Content-Length: ${contentLength}
+                    Saved file name: ${fileInfo.savedFileName}
+                    Original file name: ${fileInfo.originalFileName}
+                `),
+            );
 
             res.set({
                 "Content-Type": contentType,
