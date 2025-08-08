@@ -1,6 +1,8 @@
 import fs from "fs";
 import { Request, Response } from "express";
 import { Controller, Delete, Get, Post, Req, Res, Body, Logger, Param, Query } from "@nestjs/common";
+import { pipeline } from "stream";
+import { promisify } from "util";
 
 import { FileService } from "src/domain/file/file.service";
 import { FileInfo, InitData, UploadStatusResponse } from "src/common/types/file";
@@ -13,10 +15,12 @@ import {
 } from "src/common/utils/response";
 import { getSafeFilename } from "src/common/utils/file";
 import { removeIndentation } from "src/common/utils/string";
+import { getBestCompression, shouldCompress } from "src/common/utils/compress";
 
 @Controller("/api/files")
 export class FileController {
     private readonly logger = new Logger(FileController.name);
+    private readonly pipelineAsync = promisify(pipeline);
 
     constructor(private readonly fileService: FileService) {}
 
@@ -30,9 +34,12 @@ export class FileController {
             }
 
             const stat = await fs.promises.stat(fileInfo.filePath);
+            const acceptEncoding = req.headers["accept-encoding"] || "";
             const contentType = fileInfo.mimeType || "application/octet-stream";
             const contentLength = stat.size;
             const contentDisposition = getSafeFilename(fileInfo.originalFileName, userAgent);
+
+            const isCompressed = shouldCompress(fileInfo.mimeType || "application/octet-stream", stat.size);
 
             this.logger.debug(
                 removeIndentation(`
@@ -47,11 +54,37 @@ export class FileController {
 
             res.set({
                 "Content-Type": contentType,
-                "Content-Length": contentLength.toString(),
                 "Content-Disposition": contentDisposition,
+                "Cache-Control": "public, max-age=1800",
             });
 
             const fileStream = fs.createReadStream(fileInfo.filePath);
+
+            this.logger.debug(
+                `압축여부: ${isCompressed}, MIME 타입: ${fileInfo.mimeType}, 파일 크기: ${contentLength} bytes`,
+            );
+
+            if (isCompressed) {
+                const compression = getBestCompression(acceptEncoding);
+
+                if (compression) {
+                    res.set({
+                        "Content-Encoding": compression.encoding,
+                        Vary: "Accept-Encoding",
+                        "Transfer-Encoding": "chunked",
+                    });
+
+                    // 스트림 파이프라인으로 압축 전송
+                    await this.pipelineAsync(fileStream, compression.stream, res);
+
+                    this.logger.log(
+                        `[DOWNLOAD] File: ${fileInfo.originalFileName}, Compression: ${compression.encoding}`,
+                    );
+                    return;
+                }
+            }
+
+            res.set("Content-Length", contentLength.toString());
             fileStream.pipe(res);
         } catch (error) {
             this.logger.error(`[DOWNLOAD ERROR] ${error}`);
