@@ -38,7 +38,6 @@ export class FileController {
             const contentType = fileInfo.mimeType || "application/octet-stream";
             const contentLength = stat.size;
             const contentDisposition = getSafeFilename(fileInfo.originalFileName, userAgent);
-
             const isCompressed = shouldCompress(fileInfo.mimeType || "application/octet-stream", stat.size);
 
             this.logger.debug(
@@ -49,6 +48,7 @@ export class FileController {
                     Content-Length: ${contentLength}
                     Saved file name: ${fileInfo.savedFileName}
                     Original file name: ${fileInfo.originalFileName}
+                    압축여부: ${isCompressed}
                 `),
             );
 
@@ -60,10 +60,6 @@ export class FileController {
 
             const fileStream = fs.createReadStream(fileInfo.filePath);
 
-            this.logger.debug(
-                `압축여부: ${isCompressed}, MIME 타입: ${fileInfo.mimeType}, 파일 크기: ${contentLength} bytes`,
-            );
-
             if (isCompressed) {
                 const compression = getBestCompression(acceptEncoding);
 
@@ -74,21 +70,59 @@ export class FileController {
                         "Transfer-Encoding": "chunked",
                     });
 
-                    // 스트림 파이프라인으로 압축 전송
-                    await this.pipelineAsync(fileStream, compression.stream, res);
-
-                    this.logger.log(
-                        `[DOWNLOAD] File: ${fileInfo.originalFileName}, Compression: ${compression.encoding}`,
+                    // 압축 시작 로그
+                    this.logger.debug(
+                        `[DOWNLOAD] 압축 시작: ${compression.encoding}, 파일: ${fileInfo.originalFileName}`,
                     );
+
+                    // 압축 통계를 위한 변수
+                    let compressedBytes = 0;
+                    compression.stream.on("data", chunk => {
+                        compressedBytes += chunk.length;
+                    });
+
+                    compression.stream.on("end", () => {
+                        const compressionRatio = ((contentLength - compressedBytes) / contentLength) * 100;
+                        const savedBytes = contentLength - compressedBytes;
+
+                        this.logger.debug(
+                            removeIndentation(`
+                                [ DOWNLOAD - 압축 완료 ]
+                                File: ${fileInfo.originalFileName}
+                                Method: ${compression.encoding.toUpperCase()}
+                                원본: ${this.formatBytes(contentLength)}
+                                압축: ${this.formatBytes(compressedBytes)}
+                                압축률: ${compressionRatio.toFixed(1)}%
+                                절약: ${this.formatBytes(savedBytes)}
+                            `),
+                        );
+                    });
+
+                    // 파이프라인 실행 및 완료 로그
+                    try {
+                        await this.pipelineAsync(fileStream, compression.stream, res);
+                        this.logger.debug(`[DOWNLOAD] 파이프라인 완료: ${fileInfo.originalFileName}`);
+                    } catch (pipelineError) {
+                        this.logger.error(`[DOWNLOAD] 파이프라인 에러: ${pipelineError}`);
+                        throw pipelineError;
+                    }
+
                     return;
                 }
             }
+
+            // 압축하지 않는 경우
+            this.logger.debug(
+                `[DOWNLOAD] 압축 없음: ${fileInfo.originalFileName}, 크기: ${this.formatBytes(contentLength)}`,
+            );
 
             res.set("Content-Length", contentLength.toString());
             fileStream.pipe(res);
         } catch (error) {
             this.logger.error(`[DOWNLOAD ERROR] ${error}`);
-            sendInternalServerError(res, "다운로드에 실패 했습니다.");
+            if (!res.headersSent) {
+                sendInternalServerError(res, "다운로드에 실패 했습니다.");
+            }
         }
     }
 
@@ -230,5 +264,15 @@ export class FileController {
                 sendInternalServerError(res, "업로드 취소에 실패했습니다.");
             }
         }
+    }
+
+    private formatBytes(bytes: number): string {
+        if (bytes === 0) return "0 Bytes";
+
+        const k = 1024;
+        const sizes = ["Bytes", "KB", "MB", "GB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
     }
 }
