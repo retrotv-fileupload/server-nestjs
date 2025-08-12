@@ -16,6 +16,7 @@ import {
 import { getSafeFilename } from "src/common/utils/file";
 import { removeIndentation } from "src/common/utils/string";
 import { getBestCompression, shouldCompress } from "src/common/utils/compress";
+import { formatBytes, formatPercent } from "src/common/utils/format";
 
 @Controller("/api/files")
 export class FileController {
@@ -81,26 +82,23 @@ export class FileController {
                         compressedBytes += chunk.length;
                     });
 
-                    compression.stream.on("end", () => {
-                        const compressionRatio = ((contentLength - compressedBytes) / contentLength) * 100;
-                        const savedBytes = contentLength - compressedBytes;
+                    // 파이프라인 실행 및 완료 로그
+                    try {
+                        await this.pipelineAsync(fileStream, compression.stream, res);
 
+                        const savedBytes = contentLength - compressedBytes;
                         this.logger.debug(
                             removeIndentation(`
                                 [ DOWNLOAD - 압축 완료 ]
                                 File: ${fileInfo.originalFileName}
                                 Method: ${compression.encoding.toUpperCase()}
-                                원본: ${this.formatBytes(contentLength)}
-                                압축: ${this.formatBytes(compressedBytes)}
-                                압축률: ${compressionRatio.toFixed(1)}%
-                                절약: ${this.formatBytes(savedBytes)}
+                                원본: ${formatBytes(contentLength)}
+                                압축: ${formatBytes(compressedBytes)}
+                                압축률: ${formatPercent(savedBytes, contentLength)}
+                                절약: ${formatBytes(savedBytes)}
                             `),
                         );
-                    });
 
-                    // 파이프라인 실행 및 완료 로그
-                    try {
-                        await this.pipelineAsync(fileStream, compression.stream, res);
                         this.logger.debug(`[DOWNLOAD] 파이프라인 완료: ${fileInfo.originalFileName}`);
                     } catch (pipelineError) {
                         this.logger.error(`[DOWNLOAD] 파이프라인 에러: ${pipelineError}`);
@@ -113,7 +111,7 @@ export class FileController {
 
             // 압축하지 않는 경우
             this.logger.debug(
-                `[DOWNLOAD] 압축 없음: ${fileInfo.originalFileName}, 크기: ${this.formatBytes(contentLength)}`,
+                `[DOWNLOAD] 압축 없음: ${fileInfo.originalFileName}, 크기: ${formatBytes(contentLength)}`,
             );
 
             res.set("Content-Length", contentLength.toString());
@@ -264,15 +262,5 @@ export class FileController {
                 sendInternalServerError(res, "업로드 취소에 실패했습니다.");
             }
         }
-    }
-
-    private formatBytes(bytes: number): string {
-        if (bytes === 0) return "0 Bytes";
-
-        const k = 1024;
-        const sizes = ["Bytes", "KB", "MB", "GB"];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
     }
 }
