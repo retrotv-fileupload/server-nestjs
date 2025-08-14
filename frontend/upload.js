@@ -107,7 +107,7 @@ function startStatusMonitoring() {
         if (!sessionId) return;
 
         try {
-            const response = await fetch(`${API_BASE}/api/files/upload/status?sessionId=${sessionId}`);
+            const response = await fetch(`${API_BASE}/api/files/upload/status/${sessionId}`);
             const data = await response.json();
 
             if (response.ok) {
@@ -175,6 +175,8 @@ async function startUpload() {
                 mimeType: file.type,
             }),
         });
+
+        console.log(initResponse);
 
         const initData = await initResponse.json();
         if (!initResponse.ok) {

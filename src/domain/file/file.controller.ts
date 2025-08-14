@@ -1,6 +1,6 @@
 import fs from "fs";
 import { Request, Response } from "express";
-import { Controller, Delete, Get, Post, Req, Res, Body, Logger, Param, Query } from "@nestjs/common";
+import { Controller, Delete, Get, Post, Req, Res, Body, Logger, Param } from "@nestjs/common";
 import { pipeline } from "stream";
 import { promisify } from "util";
 
@@ -124,8 +124,8 @@ export class FileController {
         }
     }
 
-    @Get("/upload/status")
-    async getStatus(@Query("sessionId") sessionId: string, @Res() res: Response): Promise<void> {
+    @Get("/upload/status/:id")
+    async getStatus(@Param("id") sessionId: string, @Res() res: Response): Promise<void> {
         this.logger.debug(`[STATUS] 세션 ID: ${sessionId}`);
 
         if (!sessionId) {
